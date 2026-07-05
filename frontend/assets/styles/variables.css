@@ -1,0 +1,38 @@
+/* Dark theme (default) */
+:root,
+[data-theme="dark"] {
+  --color-bg: #0f0f0f;
+  --color-surface: #1a1a1a;
+  --color-surface-hover: #252525;
+  --color-border: #333;
+  --color-text: #e8e8e8;
+  --color-text-secondary: #aaa;
+  --color-primary: #ff6b9d;
+  --color-primary-hover: #ff85b0;
+  --color-danger: #e74c3c;
+  --color-success: #2ecc71;
+  --shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Light theme */
+[data-theme="light"] {
+  --color-bg: #f5f5f5;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f0f0f0;
+  --color-border: #e0e0e0;
+  --color-text: #1a1a1a;
+  --color-text-secondary: #666;
+  --color-primary: #ff6b9d;
+  --color-primary-hover: #e55a88;
+  --shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Shared tokens */
+:root {
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 50px;
+  --transition-normal: 200ms ease;
+  --header-height: 56px;
+}

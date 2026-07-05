@@ -27,6 +27,14 @@ go.work.sum
 # env file
 .env
 
+# Node / Frontend
+node_modules/
+frontend/.nuxt/
+frontend/.output/
+frontend/node_modules/
+*.log
+npm-debug.log*
+
 # Editor/IDE
 # .idea/
 # .vscode/
