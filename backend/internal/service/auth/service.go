@@ -9,17 +9,20 @@ import (
 	"github.com/My-TuDo/B-B/backend/internal/repository/auth"
 	"github.com/My-TuDo/B-B/backend/pkg/errcode"
 	"github.com/My-TuDo/B-B/backend/pkg/jwt"
+	"github.com/My-TuDo/B-B/backend/pkg/storage"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 type Service struct {
 	repo *auth.Repository
 	rdb  *redis.Client
+	db   *gorm.DB
 }
 
-func NewService(repo *auth.Repository, rdb *redis.Client) *Service {
-	return &Service{repo: repo, rdb: rdb}
+func NewService(repo *auth.Repository, rdb *redis.Client, db *gorm.DB) *Service {
+	return &Service{repo: repo, rdb: rdb, db: db}
 }
 
 func (s *Service) Register(ctx context.Context, req *usermodel.RegisterReq) (*usermodel.LoginResp, string, error) {
@@ -69,11 +72,18 @@ func (s *Service) Register(ctx context.Context, req *usermodel.RegisterReq) (*us
 		return nil, "", fmt.Errorf("auth.service.Register: %w", err)
 	}
 
+	// Create default favorites folder
+	var favCount int64
+	s.db.WithContext(ctx).Table("favorites").Where("user_id = ? AND name = ?", user.ID, "默认收藏夹").Count(&favCount)
+	if favCount == 0 {
+		s.db.WithContext(ctx).Exec("INSERT INTO favorites (user_id, name, is_public, created_at) VALUES (?, ?, 1, NOW())", user.ID, "默认收藏夹")
+	}
+
 	resp := &usermodel.LoginResp{
 		ID:       user.ID,
 		Username: user.Username,
 		Nickname: user.Nickname,
-		Avatar:   user.Avatar,
+		Avatar:   presignAvatar(ctx, user.Avatar),
 	}
 
 	return resp, token, nil
@@ -106,7 +116,7 @@ func (s *Service) Login(ctx context.Context, account, password string) (*usermod
 		ID:       user.ID,
 		Username: user.Username,
 		Nickname: user.Nickname,
-		Avatar:   user.Avatar,
+		Avatar:   presignAvatar(ctx, user.Avatar),
 	}
 
 	return resp, token, nil
@@ -133,7 +143,7 @@ func (s *Service) GetMe(ctx context.Context, userID uint) (*usermodel.UserResp, 
 		ID:        user.ID,
 		Username:  user.Username,
 		Nickname:  user.Nickname,
-		Avatar:    user.Avatar,
+		Avatar:    presignAvatar(ctx, user.Avatar),
 		Bio:       user.Bio,
 		CreatedAt: user.CreatedAt,
 	}, nil
@@ -178,4 +188,14 @@ func (e *Error) Error() string {
 
 func newError(code int) *Error {
 	return &Error{Code: code, Msg: errcode.Message(code)}
+}
+
+func presignAvatar(ctx context.Context, avatar string) string {
+	if avatar == "" {
+		return ""
+	}
+	if url, err := storage.GetPresignedURL(ctx, avatar, time.Hour); err == nil {
+		return url
+	}
+	return "" // fallback: don't return unreadable raw key
 }

@@ -7,6 +7,7 @@ import (
 
 	usermodel "github.com/My-TuDo/B-B/backend/internal/model/user"
 	authservice "github.com/My-TuDo/B-B/backend/internal/service/auth"
+	"github.com/My-TuDo/B-B/backend/internal/middleware"
 	"github.com/My-TuDo/B-B/backend/pkg/errcode"
 	"github.com/My-TuDo/B-B/backend/pkg/logger"
 	"github.com/My-TuDo/B-B/backend/pkg/response"
@@ -155,6 +156,11 @@ func (h *Handler) Refresh(c *gin.Context) {
 
 	setCookie(c, newToken)
 	response.Success(c, nil)
+}
+
+func (h *Handler) CSRF(c *gin.Context) {
+	token := middleware.SetCSRFCookie(c)
+	response.Success(c, gin.H{"token": token})
 }
 
 func setCookie(c *gin.Context, token string) {

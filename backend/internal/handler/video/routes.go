@@ -11,13 +11,15 @@ import (
 
 func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, rdb *redis.Client) {
 	repo := videorepo.NewRepository(db)
-	svc := videoservice.NewService(repo)
+	svc := videoservice.NewServiceWithRedis(repo, rdb)
 	handler := NewHandler(svc)
 
 	videos := r.Group("/videos")
 	{
 		// Public
 		videos.GET("/", handler.ListVideos)
+		videos.GET("/hot", handler.HotVideos)
+		videos.GET("/ranking", handler.Ranking)
 		videos.GET("/:id", handler.GetVideo)
 		videos.GET("/:id/play-url", handler.GetPlayURL)
 		videos.GET("/users/:id/videos", handler.ListUserVideos)

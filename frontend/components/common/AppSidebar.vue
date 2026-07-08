@@ -10,13 +10,22 @@
       <NuxtLink
         to="/"
         class="sidebar-item"
-        :class="{ 'bg-[var(--color-surface-hover)]': route.path === '/' && !route.query.category_id }"
+        :class="{ 'sidebar-item--active': route.path === '/' && !route.query.category_id }"
       >
         <IconHome class="sidebar-icon" />
         <span v-show="isExpanded" class="sidebar-label">首页</span>
       </NuxtLink>
 
-      <div class="my-2 border-t border-[var(--color-border)]"></div>
+      <NuxtLink
+        to="/ranking"
+        class="sidebar-item"
+        :class="{ 'sidebar-item--active': route.path === '/ranking' }"
+      >
+        <IconRanking class="sidebar-icon" />
+        <span v-show="isExpanded" class="sidebar-label">排行榜</span>
+      </NuxtLink>
+
+      <div class="my-2 mx-4 border-t border-[var(--color-border)]"></div>
 
       <!-- Categories accordion -->
       <button
@@ -34,12 +43,22 @@
           :key="cat.id"
           :to="`/?category_id=${cat.id}`"
           class="sidebar-item"
-          :class="{ 'bg-[var(--color-surface-hover)]': route.query.category_id === String(cat.id) }"
+          :class="{ 'sidebar-item--active': route.query.category_id === String(cat.id) }"
         >
           <component :is="categoryIcon(cat.slug)" class="sidebar-icon" />
           <span class="sidebar-label">{{ cat.name }}</span>
         </NuxtLink>
       </template>
+
+      <!-- Creator center -->
+      <NuxtLink
+        to="/creator"
+        class="sidebar-item"
+        :class="{ 'sidebar-item--active': route.path === '/creator' }"
+      >
+        <IconCreator class="sidebar-icon" />
+        <span v-show="isExpanded" class="sidebar-label">创作中心</span>
+      </NuxtLink>
     </nav>
 
     <!-- Pinned bottom area -->
@@ -47,7 +66,7 @@
       <NuxtLink
         :to="`/user/${userStore.userInfo?.id}`"
         class="sidebar-item"
-        :class="{ 'bg-[var(--color-surface-hover)]': route.path.startsWith('/user/') }"
+        :class="{ 'sidebar-item--active': route.path.startsWith('/user/') }"
       >
         <IconUser class="sidebar-icon" />
         <span v-show="isExpanded" class="sidebar-label">个人中心</span>
@@ -56,10 +75,19 @@
       <NuxtLink
         to="/drafts"
         class="sidebar-item"
-        :class="{ 'bg-[var(--color-surface-hover)]': route.path === '/drafts' }"
+        :class="{ 'sidebar-item--active': route.path === '/drafts' }"
       >
         <IconDraft class="sidebar-icon" />
         <span v-show="isExpanded" class="sidebar-label">稿件管理</span>
+      </NuxtLink>
+
+      <NuxtLink
+        to="/history"
+        class="sidebar-item"
+        :class="{ 'sidebar-item--active': route.path === '/history' }"
+      >
+        <IconHistory class="sidebar-icon" />
+        <span v-show="isExpanded" class="sidebar-label">观看历史</span>
       </NuxtLink>
     </div>
 
@@ -113,7 +141,7 @@ const strokeProps = {
   viewBox: '0 0 24 24',
   fill: 'none',
   stroke: 'currentColor',
-  'stroke-width': '2',
+  'stroke-width': '1.75',
   'stroke-linecap': 'round' as const,
   'stroke-linejoin': 'round' as const,
 }
@@ -163,6 +191,15 @@ const IconTech: FunctionalComponent = () =>
 const IconDefault: FunctionalComponent = () =>
   h('svg', strokeProps, [h('path', { d: 'M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z' }), h('polyline', { points: '14 2 14 8 20 8' })])
 
+const IconRanking: FunctionalComponent = () =>
+  h('svg', strokeProps, [h('path', { d: 'M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 7 7 7 7' }), h('path', { d: 'M18 9h1.5a2.5 2.5 0 0 0 0-5C17 4 17 7 17 7' }), h('path', { d: 'M4 22h16' }), h('path', { d: 'M10 22V8c0-1.1.9-2 2-2s2 .9 2 2v14' })])
+
+const IconHistory: FunctionalComponent = () =>
+  h('svg', strokeProps, [h('circle', { cx: '12', cy: '12', r: '10' }), h('polyline', { points: '12 6 12 12 16 14' })])
+
+const IconCreator: FunctionalComponent = () =>
+  h('svg', strokeProps, [h('path', { d: 'M12 20h9' }), h('path', { d: 'M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z' })])
+
 const iconMap: Record<string, FunctionalComponent> = {
   anime: IconAnime,
   music: IconMusic,
@@ -198,12 +235,34 @@ onMounted(async () => {
   text-decoration: none;
   color: var(--color-text);
   font-size: 14px;
-  transition: background-color var(--transition-normal);
+  transition: background-color var(--transition-fast), color var(--transition-fast);
   white-space: nowrap;
   overflow: hidden;
+  position: relative;
 }
 .sidebar-item:hover {
   background-color: var(--color-surface-hover);
+  color: var(--color-text);
+}
+.sidebar-item--active {
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-weight: 500;
+}
+.sidebar-item--active:hover {
+  background-color: var(--color-primary-softer);
+  color: var(--color-primary);
+}
+.sidebar-item--active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 18px;
+  border-radius: 0 3px 3px 0;
+  background-color: var(--color-primary);
 }
 .sidebar-icon {
   width: 24px;

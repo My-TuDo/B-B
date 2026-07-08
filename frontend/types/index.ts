@@ -5,6 +5,7 @@ export interface UserInfo {
   avatar: string
   bio: string
   created_at: string
+  role?: number
 }
 
 export interface UserBrief {
@@ -55,4 +56,154 @@ export interface LoginResp {
   username: string
   nickname: string
   avatar: string
+}
+
+export interface Tag {
+  id: number
+  name: string
+}
+
+export interface HistoryItem {
+  video: VideoInfo
+  progress: number
+  watched_at: string
+}
+
+export interface HistoryListResp {
+  items: HistoryItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface SearchSuggestion {
+  keyword: string
+  count: number
+}
+
+export interface CreatorStats {
+  total_views: number
+  total_videos: number
+  today_views: number
+  today_new_fans: number
+}
+
+export interface AdminVideoItem {
+  id: number
+  title: string
+  status: number
+  created_at: string
+  user?: UserBrief
+}
+
+export interface RankingData {
+  items: VideoInfo[]
+  total: number
+  page: number
+  page_size: number
+  period: string
+}
+
+export interface DanmakuItem {
+  id: number
+  content: string
+  color: string
+  position: number
+  size: number
+  play_time: number
+  user?: UserBrief
+}
+
+export interface CommentItem {
+  id: number
+  video_id: number
+  user_id: number
+  parent_id: number
+  root_id: number
+  content: string
+  likes: number
+  created_at: string
+  user?: UserBrief
+  replies?: CommentItem[]
+}
+
+export interface CommentListResp {
+  items: CommentItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface CommentLikeResp {
+  liked: boolean
+  likes: number
+}
+
+export interface LikeResp {
+  liked: boolean
+  count: number
+}
+
+export interface CoinResp {
+  coins_today: number
+}
+
+export interface FavoriteInfo {
+  id: number
+  name: string
+  is_public: number
+  item_count: number
+  cover_url?: string
+}
+
+export interface FavoriteDetailResp {
+  favorite: FavoriteInfo
+  items: VideoInfo[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface FavoriteToggleResp {
+  favorited: boolean
+}
+
+export interface FollowResp {
+  following: boolean
+}
+
+export interface ProfileStats {
+  videos: number
+  followers: number
+  following: number
+}
+
+export interface ProfileResp {
+  user: UserInfo
+  stats: ProfileStats
+}
+
+export interface NotificationItem {
+  id: number
+  type: number
+  content: string
+  target_id: number
+  is_read: number
+  created_at: string
+  from_user?: UserBrief
+}
+
+export interface NotificationListResp {
+  items: NotificationItem[]
+  total: number
+  page: number
+  page_size: number
+  unread: number
+}
+
+export interface InteractionStatus {
+  liked: boolean
+  coins: number
+  favorited: boolean
+  following?: boolean
 }

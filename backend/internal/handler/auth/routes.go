@@ -11,7 +11,7 @@ import (
 
 func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, rdb *redis.Client) {
 	repo := authrepo.NewRepository(db)
-	svc := authservice.NewService(repo, rdb)
+	svc := authservice.NewService(repo, rdb, db)
 	handler := NewHandler(svc)
 
 	auth := r.Group("/auth")
@@ -22,4 +22,7 @@ func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, rdb *redis.Client) {
 		auth.POST("/refresh", handler.Refresh)
 		auth.GET("/me", middleware.AuthRequired(), handler.Me)
 	}
+
+	// CSRF token
+	r.GET("/csrf-token", handler.CSRF)
 }

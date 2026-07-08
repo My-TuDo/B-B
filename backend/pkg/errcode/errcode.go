@@ -20,6 +20,16 @@ var messages = map[int]string{
 	FileTooLarge:     "文件大小超出限制",
 	InvalidFileType:  "文件类型不支持",
 	CategoryNotFound: "分类不存在",
+	CoverUploadFail:  "封面上传失败",
+	AvatarUploadFail: "头像上传失败",
+
+	DanmakuSendFail:   "弹幕发送失败",
+	CommentNotFound:   "评论不存在",
+	CommentDeleteFail: "评论删除失败",
+	CoinLimitExceeded: "今日投币已达上限",
+	CoinAlreadyCoined: "该视频已投过币，每视频仅可投一次",
+	FavoriteNotFound:  "收藏夹不存在",
+	CannotFollowSelf:  "不能关注自己",
 }
 
 const (
@@ -41,8 +51,18 @@ const (
 	VideoNotFound   = 4001
 	VideoUploadFail = 4002
 	FileTooLarge    = 4003
-	InvalidFileType = 4004
+	InvalidFileType  = 4004
+	CoverUploadFail  = 4005
+	AvatarUploadFail  = 4006
 	CategoryNotFound = 5001
+
+	DanmakuSendFail   = 6001
+	CommentNotFound   = 6002
+	CommentDeleteFail = 6003
+	CoinLimitExceeded = 6004
+	CoinAlreadyCoined = 6007
+	FavoriteNotFound  = 6005
+	CannotFollowSelf  = 6006
 )
 
 func Message(code int) string {

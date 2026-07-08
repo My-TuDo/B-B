@@ -1,67 +1,67 @@
 <template>
   <div>
-    <h2 class="text-xl font-bold text-[var(--color-text)] mb-6">注册</h2>
+    <h2 class="text-2xl font-bold text-[var(--color-text)] mb-6">注册</h2>
 
-    <form @submit.prevent="handleRegister" class="space-y-4">
+    <form @submit.prevent="handleRegister" class="space-y-5">
       <div>
-        <label class="block text-sm text-[var(--color-text-secondary)] mb-1.5">用户名</label>
+        <label class="block text-sm font-medium text-[var(--color-text)] mb-1.5">用户名</label>
         <input
           v-model="username"
           type="text"
           placeholder="3-20位字母、数字或下划线"
-          class="w-full h-10 px-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-text)] text-sm placeholder-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-primary)] transition-colors"
+          class="w-full h-11 px-3.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-text)] text-sm placeholder-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-focus-ring)] transition-all duration-[var(--transition-normal)]"
           required
         />
-        <p v-if="usernameError" class="mt-1 text-xs text-[var(--color-danger)]">{{ usernameError }}</p>
+        <p v-if="usernameError" class="mt-1.5 text-xs text-[var(--color-danger)]">{{ usernameError }}</p>
       </div>
 
       <div>
-        <label class="block text-sm text-[var(--color-text-secondary)] mb-1.5">邮箱</label>
+        <label class="block text-sm font-medium text-[var(--color-text)] mb-1.5">邮箱</label>
         <input
           v-model="email"
           type="email"
           placeholder="请输入邮箱地址"
-          class="w-full h-10 px-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-text)] text-sm placeholder-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-primary)] transition-colors"
+          class="w-full h-11 px-3.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-text)] text-sm placeholder-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-focus-ring)] transition-all duration-[var(--transition-normal)]"
           required
         />
-        <p v-if="emailError" class="mt-1 text-xs text-[var(--color-danger)]">{{ emailError }}</p>
+        <p v-if="emailError" class="mt-1.5 text-xs text-[var(--color-danger)]">{{ emailError }}</p>
       </div>
 
       <div>
-        <label class="block text-sm text-[var(--color-text-secondary)] mb-1.5">密码</label>
+        <label class="block text-sm font-medium text-[var(--color-text)] mb-1.5">密码</label>
         <input
           v-model="password"
           type="password"
           placeholder="至少8位，包含字母和数字"
-          class="w-full h-10 px-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-text)] text-sm placeholder-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-primary)] transition-colors"
+          class="w-full h-11 px-3.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-text)] text-sm placeholder-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-focus-ring)] transition-all duration-[var(--transition-normal)]"
           required
         />
-        <p v-if="passwordError" class="mt-1 text-xs text-[var(--color-danger)]">{{ passwordError }}</p>
+        <p v-if="passwordError" class="mt-1.5 text-xs text-[var(--color-danger)]">{{ passwordError }}</p>
       </div>
 
       <div>
-        <label class="block text-sm text-[var(--color-text-secondary)] mb-1.5">确认密码</label>
+        <label class="block text-sm font-medium text-[var(--color-text)] mb-1.5">确认密码</label>
         <input
           v-model="confirmPassword"
           type="password"
           placeholder="请再次输入密码"
-          class="w-full h-10 px-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-text)] text-sm placeholder-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-primary)] transition-colors"
+          class="w-full h-11 px-3.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-text)] text-sm placeholder-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-focus-ring)] transition-all duration-[var(--transition-normal)]"
           required
         />
-        <p v-if="confirmError" class="mt-1 text-xs text-[var(--color-danger)]">{{ confirmError }}</p>
+        <p v-if="confirmError" class="mt-1.5 text-xs text-[var(--color-danger)]">{{ confirmError }}</p>
       </div>
 
       <button
         type="submit"
         :disabled="loading"
-        class="w-full h-10 bg-[var(--color-primary)] text-white text-sm rounded-[var(--radius-md)] hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        class="w-full h-11 bg-[var(--color-primary)] text-white text-sm font-medium rounded-[var(--radius-md)] hover:bg-[var(--color-primary-hover)] transition-all duration-[var(--transition-normal)] disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-[var(--color-primary)]/25 active:scale-[0.98]"
       >
         {{ loading ? '注册中...' : '注册' }}
       </button>
     </form>
 
     <p class="mt-6 text-center text-sm text-[var(--color-text-secondary)]">
-      已有账号？<NuxtLink to="/login" class="text-[var(--color-primary)] hover:text-[var(--color-primary-hover)]">去登录</NuxtLink>
+      已有账号？<NuxtLink to="/login" class="text-[var(--color-primary)] hover:text-[var(--color-primary-hover)] font-medium">去登录</NuxtLink>
     </p>
   </div>
 </template>

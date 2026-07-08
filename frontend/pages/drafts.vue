@@ -18,10 +18,10 @@
         :key="tab.key"
         @click="activeTab = tab.key"
         :class="[
-          'px-4 py-2 text-sm rounded-[var(--radius-full)] transition-colors',
+          'px-5 py-2 text-sm font-medium rounded-[var(--radius-full)] transition-all duration-[var(--transition-normal)]',
           activeTab === tab.key
-            ? 'bg-[var(--color-primary)] text-white'
-            : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]'
+            ? 'bg-[var(--color-primary)] text-white shadow-sm shadow-[var(--color-primary)]/25'
+            : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
         ]"
       >
         {{ tab.label }}
@@ -113,34 +113,67 @@
 
         <div class="space-y-4">
           <div>
-            <label class="block text-sm text-[var(--color-text-secondary)] mb-1">标题</label>
+            <label class="block text-sm font-medium text-[var(--color-text)] mb-1.5">标题</label>
             <input
               v-model="editForm.title"
               type="text"
               maxlength="100"
-              class="w-full h-10 px-3 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-text)] text-sm focus:outline-none focus:border-[var(--color-primary)]"
+              class="w-full h-10 px-3.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-text)] text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-focus-ring)] transition-all duration-[var(--transition-normal)]"
             />
           </div>
           <div>
-            <label class="block text-sm text-[var(--color-text-secondary)] mb-1">简介</label>
+            <label class="block text-sm font-medium text-[var(--color-text)] mb-1.5">简介</label>
             <textarea
               v-model="editForm.description"
               maxlength="2000"
               rows="3"
-              class="w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-text)] text-sm focus:outline-none focus:border-[var(--color-primary)] resize-none"
+              class="w-full px-3.5 py-2.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-text)] text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-focus-ring)] transition-all duration-[var(--transition-normal)] resize-none"
             ></textarea>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-[var(--color-text)] mb-1.5">分类</label>
+            <select
+              v-model="editForm.category_id"
+              class="w-full h-10 px-3.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-text)] text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-focus-ring)] transition-all duration-[var(--transition-normal)]"
+            >
+              <option :value="0">请选择分类</option>
+              <option v-for="cat in categories" :key="cat.id" :value="cat.id">
+                {{ cat.name }}
+              </option>
+            </select>
+          </div>
+          <!-- Tags -->
+          <div>
+            <label class="block text-sm font-medium text-[var(--color-text)] mb-1.5">标签</label>
+            <div class="flex flex-wrap gap-2 mb-2">
+              <span
+                v-for="tag in editForm.tags"
+                :key="tag.id"
+                class="inline-flex items-center gap-1 px-2 py-1 text-xs bg-[var(--color-primary)]/20 text-[var(--color-primary)] rounded-[var(--radius-full)]"
+              >
+                {{ tag.name }}
+                <button type="button" class="hover:text-[var(--color-danger)] transition-colors" @click="removeEditTag(tag)">&times;</button>
+              </span>
+            </div>
+            <input
+              v-model="editTagInput"
+              type="text"
+              placeholder="输入标签后回车添加"
+              class="w-full h-10 px-3.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-text)] text-sm placeholder-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-focus-ring)] transition-all duration-[var(--transition-normal)]"
+              @keydown.enter.prevent="addEditTag"
+            />
           </div>
         </div>
 
         <div class="flex justify-end gap-2 mt-6">
           <button
-            class="px-4 py-2 text-sm bg-[var(--color-surface-hover)] text-[var(--color-text)] rounded-[var(--radius-full)] hover:bg-[var(--color-border)] transition-colors"
+            class="px-5 py-2 text-sm font-medium bg-[var(--color-surface-hover)] text-[var(--color-text)] rounded-[var(--radius-full)] hover:bg-[var(--color-border)] transition-all duration-[var(--transition-normal)] active:scale-[0.98]"
             @click="editingDraft = null"
           >
             取消
           </button>
           <button
-            class="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-[var(--radius-full)] hover:bg-[var(--color-primary-hover)] transition-colors"
+            class="px-5 py-2 text-sm font-medium bg-[var(--color-primary)] text-white rounded-[var(--radius-full)] hover:bg-[var(--color-primary-hover)] transition-all duration-[var(--transition-normal)] active:scale-[0.98] shadow-sm shadow-[var(--color-primary)]/25"
             @click="saveEdit"
           >
             保存
@@ -148,6 +181,25 @@
         </div>
       </div>
     </div>
+
+    <!-- Delete confirmation modal -->
+    <AppModal :visible="showDeleteConfirm" title="删除视频" @close="showDeleteConfirm = false">
+      <p class="text-sm text-[var(--color-text)] mb-6">确定要删除这个草稿吗？删除后无法恢复。</p>
+      <div class="flex justify-end gap-2">
+        <button
+          class="px-5 py-2 text-sm font-medium bg-[var(--color-surface-hover)] text-[var(--color-text)] rounded-[var(--radius-full)] hover:bg-[var(--color-border)] transition-colors active:scale-[0.98]"
+          @click="showDeleteConfirm = false"
+        >
+          取消
+        </button>
+        <button
+          class="px-5 py-2 text-sm font-medium bg-[var(--color-danger)] text-white rounded-[var(--radius-full)] hover:bg-red-600 transition-colors active:scale-[0.98]"
+          @click="confirmDelete"
+        >
+          删除
+        </button>
+      </div>
+    </AppModal>
   </div>
 </template>
 
@@ -155,13 +207,14 @@
 import { useApi } from '~/composables/useApi'
 import { useUserStore } from '~/stores/userStore'
 import { useToast } from '~/composables/useToast'
-import type { VideoInfo, PaginatedData } from '~/types'
+import type { VideoInfo, PaginatedData, Tag, Category } from '~/types'
+import AppModal from '~/components/common/AppModal.vue'
 
 definePageMeta({
   middleware: 'auth',
 })
 
-const { get, put, del } = useApi()
+const { get, put, del, post } = useApi()
 const userStore = useUserStore()
 const { showToast } = useToast()
 
@@ -174,8 +227,13 @@ const activeTab = ref('all')
 const drafts = ref<VideoInfo[]>([])
 const loading = ref(true)
 const error = ref('')
+const showDeleteConfirm = ref(false)
+const pendingDeleteDraft = ref<VideoInfo | null>(null)
 const editingDraft = ref<VideoInfo | null>(null)
-const editForm = ref({ title: '', description: '' })
+const editForm = ref({ title: '', description: '', category_id: 0, tags: [] as Tag[] })
+const editTagInput = ref('')
+const allTags = ref<Tag[]>([])
+const categories = ref<Category[]>([])
 
 const emptyMessage = computed(() => {
   switch (activeTab.value) {
@@ -227,10 +285,37 @@ async function publishDraft(draft: VideoInfo) {
   }
 }
 
-function openEdit(draft: VideoInfo) {
+async function openEdit(draft: VideoInfo) {
   editingDraft.value = draft
   editForm.value.title = draft.title
   editForm.value.description = draft.description
+  editForm.value.category_id = draft.category_id || 0
+  editForm.value.tags = []
+  // Load tags for this video
+  try {
+    const tags = await get<Tag[]>(`/api/v1/videos/${draft.id}/tags`)
+    editForm.value.tags = tags || []
+  } catch {
+    editForm.value.tags = []
+  }
+}
+
+function addEditTag() {
+  const name = editTagInput.value.trim()
+  if (!name) return
+  const existing = allTags.value.find(t => t.name === name)
+  if (existing) {
+    if (!editForm.value.tags.find(t => t.id === existing.id)) {
+      editForm.value.tags.push(existing)
+    }
+  } else {
+    editForm.value.tags.push({ id: 0, name })
+  }
+  editTagInput.value = ''
+}
+
+function removeEditTag(tag: Tag) {
+  editForm.value.tags = editForm.value.tags.filter(t => t.id !== tag.id && t.name !== tag.name)
 }
 
 async function saveEdit() {
@@ -240,7 +325,23 @@ async function saveEdit() {
     await put(`/api/v1/videos/${editingDraft.value.id}`, {
       title: editForm.value.title,
       description: editForm.value.description,
+      category_id: editForm.value.category_id > 0 ? editForm.value.category_id : undefined,
     })
+    // Save tags: create/lookup each tag by name, then set video tags
+    if (editForm.value.tags.length > 0) {
+      try {
+        const tagIds: number[] = []
+        for (const tag of editForm.value.tags) {
+          const resp = await post<Tag>(`/api/v1/tags/`, { name: tag.name })
+          if (resp && resp.id) {
+            tagIds.push(resp.id)
+          }
+        }
+        if (tagIds.length > 0) {
+          await post(`/api/v1/videos/${editingDraft.value.id}/tags`, { tag_ids: tagIds })
+        }
+      } catch { /* ignore tag errors */ }
+    }
     showToast('修改已保存', 'success')
     editingDraft.value = null
     await fetchVideos()
@@ -250,9 +351,15 @@ async function saveEdit() {
   }
 }
 
-async function deleteVideo(draft: VideoInfo) {
-  if (!confirm('确定要删除这个视频吗？')) return
+function deleteVideo(draft: VideoInfo) {
+  pendingDeleteDraft.value = draft
+  showDeleteConfirm.value = true
+}
 
+async function confirmDelete() {
+  if (!pendingDeleteDraft.value) return
+  const draft = pendingDeleteDraft.value
+  showDeleteConfirm.value = false
   try {
     await del(`/api/v1/videos/${draft.id}`)
     showToast('视频已删除', 'success')
@@ -262,6 +369,7 @@ async function deleteVideo(draft: VideoInfo) {
     const msg = err instanceof Error ? err.message : '删除失败'
     showToast(msg, 'error')
   }
+  pendingDeleteDraft.value = null
 }
 
 function formatTime(dateStr: string): string {
@@ -276,5 +384,15 @@ function formatFileSize(bytes: number): string {
   return `${bytes} B`
 }
 
-onMounted(fetchVideos)
+onMounted(async () => {
+  await fetchVideos()
+  try {
+    const [tags, cats] = await Promise.all([
+      get<Tag[]>('/api/v1/tags/'),
+      get<Category[]>('/api/v1/categories/'),
+    ])
+    allTags.value = tags || []
+    categories.value = cats || []
+  } catch { /* non-critical */ }
+})
 </script>

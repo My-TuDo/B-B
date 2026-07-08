@@ -13,6 +13,8 @@ import (
 
 var Client *minio.Client
 var bucketName string
+var endpoint string
+var useSSL bool
 
 func Init(cfg *config.Config) *minio.Client {
 	client, err := minio.New(cfg.MinioEndpoint, &minio.Options{
@@ -24,6 +26,8 @@ func Init(cfg *config.Config) *minio.Client {
 	}
 
 	bucketName = cfg.MinioBucket
+	endpoint = cfg.MinioEndpoint
+	useSSL = cfg.MinioUseSSL
 
 	exists, err := client.BucketExists(context.Background(), bucketName)
 	if err != nil {
@@ -63,4 +67,22 @@ func DeleteVideo(ctx context.Context, objectName string) error {
 		return fmt.Errorf("storage.DeleteVideo: %w", err)
 	}
 	return nil
+}
+
+func UploadFile(ctx context.Context, objectName string, reader io.Reader, size int64, contentType string) error {
+	_, err := Client.PutObject(ctx, bucketName, objectName, reader, size, minio.PutObjectOptions{
+		ContentType: contentType,
+	})
+	if err != nil {
+		return fmt.Errorf("storage.UploadFile: %w", err)
+	}
+	return nil
+}
+
+func GetObjectURL(objectName string) string {
+	scheme := "http"
+	if useSSL {
+		scheme = "https"
+	}
+	return fmt.Sprintf("%s://%s/%s/%s", scheme, endpoint, bucketName, objectName)
 }

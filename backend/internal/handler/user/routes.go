@@ -18,5 +18,6 @@ func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, rdb *redis.Client) {
 	{
 		users.GET("/:id", handler.GetUser)
 		users.PUT("/:id", middleware.AuthRequired(), handler.UpdateUser)
+		users.POST("/:id/avatar", middleware.AuthRequired(), handler.UploadAvatar)
 	}
 }

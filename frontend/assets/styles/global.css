@@ -2,12 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===== Typography Scale =====
+   text-xs:    12px - meta, captions, badges
+   text-sm:    14px - body, nav, card content
+   text-base:  16px - default body
+   text-lg:    18px - section subtitles
+   text-xl:    20px - page headings
+   text-2xl:   24px - major page headings
+   text-4xl:   36px - logo, hero
+*/
+
 body {
   background-color: var(--color-bg);
   color: var(--color-text);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  line-height: 1.6;
 }
 
 a {
@@ -41,4 +52,24 @@ a:hover {
 /* Video.js overrides */
 .video-js {
   font-size: 14px;
+}
+
+/* Focus visible ring for accessibility */
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Selection color */
+::selection {
+  background-color: var(--color-primary);
+  color: white;
+}
+
+/* Smooth transitions on interactive elements */
+button, a, input, select, textarea {
+  transition-property: color, background-color, border-color, box-shadow, transform;
+  transition-duration: var(--transition-fast, 150ms);
+  transition-timing-function: ease;
 }

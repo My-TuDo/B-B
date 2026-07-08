@@ -88,6 +88,43 @@ func (r *Repository) ListByUser(ctx context.Context, userID uint, status *int8, 
 	return videos, total, nil
 }
 
+func (r *Repository) ListAllPublic(ctx context.Context) ([]videomodel.Video, error) {
+	var videos []videomodel.Video
+	result := r.db.WithContext(ctx).Preload("User").Where("status = ?", 1).Find(&videos)
+	if result.Error != nil {
+		return nil, fmt.Errorf("video.repository.ListAllPublic: %w", result.Error)
+	}
+	return videos, nil
+}
+
+func (r *Repository) ListByStatus(ctx context.Context, status int8, page, pageSize int) ([]videomodel.Video, int64, error) {
+	var videos []videomodel.Video
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&videomodel.Video{}).Where("status = ?", status)
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("video.repository.ListByStatus.Count: %w", err)
+	}
+
+	offset := (page - 1) * pageSize
+	if err := query.Preload("User").Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&videos).Error; err != nil {
+		return nil, 0, fmt.Errorf("video.repository.ListByStatus.Find: %w", err)
+	}
+
+	return videos, total, nil
+}
+
+func (r *Repository) UpdateDuration(ctx context.Context, videoID uint, duration uint) error {
+	result := r.db.WithContext(ctx).Model(&videomodel.Video{}).
+		Where("id = ? AND duration = 0", videoID).
+		Update("duration", duration)
+	if result.Error != nil {
+		return fmt.Errorf("video.repository.UpdateDuration: %w", result.Error)
+	}
+	return nil
+}
+
 func (r *Repository) IncrementViews(ctx context.Context, id uint) error {
 	result := r.db.WithContext(ctx).Model(&videomodel.Video{}).Where("id = ?", id).
 		UpdateColumn("views", gorm.Expr("views + 1"))

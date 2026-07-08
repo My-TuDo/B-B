@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"strconv"
 	"strings"
@@ -78,17 +79,27 @@ func (h *Handler) Upload(c *gin.Context) {
 		}
 	}
 
-	// We need to re-read the file from the beginning after magic byte check
-	// Since we already read 512 bytes, we need to seek back to 0
-	// But multipart.File may not support Seek, so we use a different approach:
-	// The file was read 512 bytes for magic check, but since it's consumed,
-	// we pass a combined reader approach. Actually, let's just use the original
-	// file form field approach. The issue is multipart.File doesn't always support Seek.
-	// Let's read the remaining part and combine them.
-	// Actually, we'll use a different approach: read all into memory (bad for large files)
-	// OR use a pipe to combine magicBuf + remaining file.
-	// Simplest approach for now: read all bytes into buffer (max 500MB validated by service).
-	// But that's bad. Let's create a combined approach.
+	// Get cover file (optional)
+	var coverFile multipart.File
+	var coverHeader *multipart.FileHeader
+	coverFile, coverHeader, err = c.Request.FormFile("cover")
+	if err == nil {
+		defer coverFile.Close()
+
+		// Validate cover MIME
+		coverContentType := coverHeader.Header.Get("Content-Type")
+		if !isValidCoverMIME(coverContentType) {
+			response.Error(c, http.StatusBadRequest, errcode.InvalidFileType, "封面图片格式不支持，仅支持 JPEG/PNG/WebP/GIF")
+			return
+		}
+
+		// Validate cover size (max 5MB)
+		const maxCoverSize = 5 * 1024 * 1024
+		if coverHeader.Size > maxCoverSize {
+			response.Error(c, http.StatusBadRequest, errcode.FileTooLarge, "封面图片大小不能超过 5MB")
+			return
+		}
+	}
 
 	// Use a struct that reads from magicBuf first then from file
 	combinedReader := &combinedReader{
@@ -119,22 +130,31 @@ func (h *Handler) Upload(c *gin.Context) {
 		flusher.Flush()
 	}
 
-	resp, err := h.svc.UploadVideo(c.Request.Context(), userID, combinedReader, header.Filename, header.Size, contentType, title, description, categoryID, progressFn)
+	resp, err := h.svc.UploadVideo(c.Request.Context(), userID, combinedReader, header.Filename, header.Size, contentType, title, description, categoryID, progressFn, coverFile, coverHeader)
 	if err != nil {
-		var svcErr *videoservice.Error
-		if errors.As(err, &svcErr) {
-			msg := videomodel.UploadSSEMessage{Error: svcErr.Msg}
+		// If resp is not nil, video was saved but cover upload failed
+		if resp != nil {
+			msg := videomodel.UploadSSEMessage{Error: "封面上传失败，视频已保存"}
+			data, _ := json.Marshal(msg)
+			fmt.Fprintf(c.Writer, "data: %s\n\n", string(data))
+			flusher.Flush()
+			// Fall through to send complete event
+		} else {
+			var svcErr *videoservice.Error
+			if errors.As(err, &svcErr) {
+				msg := videomodel.UploadSSEMessage{Error: svcErr.Msg}
+				data, _ := json.Marshal(msg)
+				fmt.Fprintf(c.Writer, "data: %s\n\n", string(data))
+				flusher.Flush()
+				return
+			}
+			logger.Error("upload video failed", zap.Error(err))
+			msg := videomodel.UploadSSEMessage{Error: "上传失败"}
 			data, _ := json.Marshal(msg)
 			fmt.Fprintf(c.Writer, "data: %s\n\n", string(data))
 			flusher.Flush()
 			return
 		}
-		logger.Error("upload video failed", zap.Error(err))
-		msg := videomodel.UploadSSEMessage{Error: "上传失败"}
-		data, _ := json.Marshal(msg)
-		fmt.Fprintf(c.Writer, "data: %s\n\n", string(data))
-		flusher.Flush()
-		return
 	}
 
 	// Send complete event
@@ -307,6 +327,39 @@ func (h *Handler) ListUserVideos(c *gin.Context) {
 	response.Success(c, resp)
 }
 
+func (h *Handler) HotVideos(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "12"))
+
+	resp, err := h.svc.HotVideos(c.Request.Context(), page, pageSize)
+	if err != nil {
+		logger.Error("hot videos failed", zap.Error(err))
+		response.Error(c, http.StatusInternalServerError, errcode.Internal, errcode.Message(errcode.Internal))
+		return
+	}
+
+	response.Success(c, resp)
+}
+
+func (h *Handler) Ranking(c *gin.Context) {
+	period := c.DefaultQuery("period", "day")
+	if period != "day" && period != "week" && period != "total" {
+		period = "day"
+	}
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "12"))
+
+	resp, err := h.svc.Ranking(c.Request.Context(), period, page, pageSize)
+	if err != nil {
+		logger.Error("ranking failed", zap.Error(err))
+		response.Error(c, http.StatusInternalServerError, errcode.Internal, errcode.Message(errcode.Internal))
+		return
+	}
+
+	response.Success(c, resp)
+}
+
 // ==================== Helpers ====================
 
 var validVideoMIMEs = map[string]bool{
@@ -316,6 +369,17 @@ var validVideoMIMEs = map[string]bool{
 	"video/quicktime": true,
 	"video/x-msvideo": true,
 	"video/x-matroska": true,
+}
+
+var validCoverMIMEs = map[string]bool{
+	"image/jpeg": true,
+	"image/png":  true,
+	"image/webp": true,
+	"image/gif":  true,
+}
+
+func isValidCoverMIME(mime string) bool {
+	return validCoverMIMEs[mime]
 }
 
 func isValidVideoMIME(mime string) bool {
