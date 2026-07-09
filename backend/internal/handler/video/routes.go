@@ -9,9 +9,12 @@ import (
 	"gorm.io/gorm"
 )
 
-func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, rdb *redis.Client) {
+func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, rdb *redis.Client, publishFn func(videoID uint) error) {
 	repo := videorepo.NewRepository(db)
 	svc := videoservice.NewServiceWithRedis(repo, rdb)
+	if publishFn != nil {
+		svc.SetTranscodePublisher(publishFn)
+	}
 	handler := NewHandler(svc)
 
 	videos := r.Group("/videos")

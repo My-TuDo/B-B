@@ -207,3 +207,41 @@ export interface InteractionStatus {
   favorited: boolean
   following?: boolean
 }
+
+// Phase 4: Media Processing
+export interface AdminStats {
+  total_users: number
+  total_videos: number
+  total_views: number
+  total_comments: number
+  total_danmaku: number
+  today_new_users: number
+  today_new_videos: number
+}
+
+export interface AdminUserItem {
+  id: number
+  username: string
+  nickname: string
+  avatar: string
+  role: number
+  created_at: string
+}
+
+export interface AdminUsersListResp {
+  items: AdminUserItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface TranscodeStatus {
+  status: number
+  progress: number
+}
+
+export interface VideoQuality {
+  quality: string
+  play_url: string
+  file_size: number
+}

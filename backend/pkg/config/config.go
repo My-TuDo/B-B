@@ -24,6 +24,10 @@ type Config struct {
 	MinioUseSSL    bool
 	JWTSecret  string
 	LogLevel   string
+	RabbitMQHost string
+	RabbitMQPort string
+	RabbitMQUser string
+	RabbitMQPass string
 }
 
 func Load() *Config {
@@ -45,6 +49,11 @@ func Load() *Config {
 	v.SetDefault("MINIO_USE_SSL", "false")
 	v.SetDefault("JWT_SECRET", "dev-secret-change-in-production")
 	v.SetDefault("LOG_LEVEL", "debug")
+
+	v.SetDefault("RABBITMQ_HOST", "localhost")
+	v.SetDefault("RABBITMQ_PORT", "5672")
+	v.SetDefault("RABBITMQ_USER", "guest")
+	v.SetDefault("RABBITMQ_PASS", "guest")
 
 	v.SetConfigName("config")
 	v.SetConfigType("yaml")
@@ -75,6 +84,10 @@ func Load() *Config {
 		MinioUseSSL:    v.GetBool("MINIO_USE_SSL"),
 		JWTSecret:      v.GetString("JWT_SECRET"),
 		LogLevel:       v.GetString("LOG_LEVEL"),
+		RabbitMQHost:   v.GetString("RABBITMQ_HOST"),
+		RabbitMQPort:   v.GetString("RABBITMQ_PORT"),
+		RabbitMQUser:   v.GetString("RABBITMQ_USER"),
+		RabbitMQPass:   v.GetString("RABBITMQ_PASS"),
 	}
 
 	// Override from env directly (Viper AutomaticEnv sometimes needs this for non-standard names)
@@ -125,6 +138,18 @@ func Load() *Config {
 	}
 	if v := os.Getenv("LOG_LEVEL"); v != "" {
 		cfg.LogLevel = v
+	}
+	if v := os.Getenv("RABBITMQ_HOST"); v != "" {
+		cfg.RabbitMQHost = v
+	}
+	if v := os.Getenv("RABBITMQ_PORT"); v != "" {
+		cfg.RabbitMQPort = v
+	}
+	if v := os.Getenv("RABBITMQ_USER"); v != "" {
+		cfg.RabbitMQUser = v
+	}
+	if v := os.Getenv("RABBITMQ_PASS"); v != "" {
+		cfg.RabbitMQPass = v
 	}
 
 	return cfg

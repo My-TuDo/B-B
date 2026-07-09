@@ -47,7 +47,39 @@
         </div>
 
         <!-- Danmaku controls -->
-        <div class="mt-2 flex items-center gap-3">
+        <div class="mt-2 flex items-center gap-3 flex-wrap">
+          <!-- Quality selector -->
+          <div v-if="qualities.length > 0" class="relative">
+            <button
+              class="flex items-center gap-1 px-3 py-1.5 text-xs bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)] rounded-[var(--radius-full)] hover:text-[var(--color-primary)] transition-colors"
+              @click="showQualityPicker = !showQualityPicker"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/>
+              </svg>
+              {{ currentQuality }}
+            </button>
+            <div
+              v-if="showQualityPicker"
+              class="absolute bottom-full left-0 mb-1 w-28 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-lg py-1 z-20"
+            >
+              <button
+                v-for="q in qualities"
+                :key="q.quality"
+                class="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-surface-hover)] transition-colors"
+                :class="currentQuality === q.quality ? 'text-[var(--color-primary)] font-medium' : 'text-[var(--color-text)]'"
+                @click="switchQuality(q)"
+              >
+                {{ q.quality }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Transcode status -->
+          <div v-if="transcodeStatus && transcodeStatus.status !== 2" class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-[var(--radius-full)]" :class="transcodeStatusClass">
+            <svg v-if="transcodeStatus.status === 0 || transcodeStatus.status === 1" class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+            <span>{{ transcodeStatusText }}</span>
+          </div>
           <button
             class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-[var(--radius-full)] transition-colors"
             :class="showDanmaku ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]' : 'bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]'"
@@ -301,7 +333,7 @@
 </template>
 
 <script setup lang="ts">
-import type { VideoInfo, PaginatedData, HistoryItem, HistoryListResp, Tag, LikeResp, CoinResp, FavoriteInfo, FavoriteToggleResp, InteractionStatus } from '~/types'
+import type { VideoInfo, PaginatedData, HistoryItem, HistoryListResp, Tag, LikeResp, CoinResp, FavoriteInfo, FavoriteToggleResp, InteractionStatus, VideoQuality as VideoQualityType, TranscodeStatus } from '~/types'
 import { useApi } from '~/composables/useApi'
 import { useUserStore } from '~/stores/userStore'
 import { useToast } from '~/composables/useToast'
@@ -329,6 +361,13 @@ const danmakuLayerRef = ref<InstanceType<typeof DanmakuLayer> | null>(null)
 let historyInterval: ReturnType<typeof setInterval> | null = null
 let seekTimer: ReturnType<typeof setTimeout> | null = null
 
+// Quality / Transcode state
+const qualities = ref<VideoQualityType[]>([])
+const currentQuality = ref('原始')
+const showQualityPicker = ref(false)
+const transcodeStatus = ref<TranscodeStatus | null>(null)
+let transcodePollTimer: ReturnType<typeof setInterval> | null = null
+
 // Danmaku state
 const showDanmaku = ref(true)
 const danmakuContent = ref('')
@@ -352,6 +391,22 @@ const isFavorited = computed(() => interactions.value.favorited || favoritedFold
 let favPressTimer: ReturnType<typeof setTimeout> | null = null
 let isLongPress = false
 let crossReferenced = false
+
+const transcodeStatusClass = computed(() => {
+  if (!transcodeStatus.value) return ''
+  if (transcodeStatus.value.status === 3) return 'bg-red-500/15 text-red-400'
+  return 'bg-yellow-500/15 text-yellow-400'
+})
+
+const transcodeStatusText = computed(() => {
+  if (!transcodeStatus.value) return ''
+  switch (transcodeStatus.value.status) {
+    case 0: return '转码等待中...'
+    case 1: return `转码中 ${transcodeStatus.value.progress}%`
+    case 3: return '转码失败'
+    default: return ''
+  }
+})
 
 const descriptionLines = computed(() => {
   if (!video.value?.description) return 0
@@ -659,6 +714,17 @@ async function fetchVideo() {
     const id = route.params.id as string
     video.value = await get<VideoInfo>(`/api/v1/videos/${id}`)
 
+    // Fetch qualities
+    try {
+      qualities.value = await get<VideoQualityType[]>(`/api/v1/videos/${id}/qualities`)
+    } catch {
+      qualities.value = []
+    }
+
+    // Fetch transcode status
+    fetchTranscodeStatus()
+    startTranscodePolling()
+
     const playData = await get<{ play_url: string }>(`/api/v1/videos/${id}/play-url`)
     playUrl.value = playData.play_url
 
@@ -716,9 +782,55 @@ function formatTime(dateStr: string): string {
   return date.toLocaleDateString('zh-CN')
 }
 
+// Quality switching
+async function switchQuality(q: VideoQualityType) {
+  const videoEl = videoPlayerRef.value
+  if (!videoEl) return
+  const savedTime = videoEl.currentTime
+  const wasPlaying = !videoEl.paused
+  currentQuality.value = q.quality
+  playUrl.value = q.play_url
+  showQualityPicker.value = false
+  // Wait for video to load new source then restore time
+  videoEl.addEventListener('loadedmetadata', function handler() {
+    videoEl.currentTime = savedTime
+    if (wasPlaying) videoEl.play()
+    videoEl.removeEventListener('loadedmetadata', handler)
+  }, { once: true })
+}
+
+// Transcode status
+async function fetchTranscodeStatus() {
+  try {
+    const id = route.params.id as string
+    transcodeStatus.value = await get<TranscodeStatus>(`/api/v1/videos/${id}/transcode-status`)
+  } catch {
+    transcodeStatus.value = null
+  }
+}
+
+function startTranscodePolling() {
+  stopTranscodePolling()
+  transcodePollTimer = setInterval(() => {
+    if (transcodeStatus.value && transcodeStatus.value.status === 2) {
+      stopTranscodePolling()
+      return
+    }
+    fetchTranscodeStatus()
+  }, 10000)
+}
+
+function stopTranscodePolling() {
+  if (transcodePollTimer) {
+    clearInterval(transcodePollTimer)
+    transcodePollTimer = null
+  }
+}
+
 onMounted(fetchVideo)
 onUnmounted(() => {
   stopHistoryRecording()
+  stopTranscodePolling()
   if (seekTimer) clearTimeout(seekTimer)
 })
 </script>

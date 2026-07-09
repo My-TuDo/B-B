@@ -10,10 +10,13 @@ import (
 
 func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, adminSvc *adminservice.Service) {
 	videoRepo := videorepo.NewRepository(db)
-	handler := NewHandler(videoRepo, adminSvc)
+	handler := NewHandler(db, videoRepo, adminSvc)
 
 	admin := r.Group("/admin")
 	{
+		admin.GET("/stats", middleware.AuthRequired(), handler.Stats)
+		admin.GET("/users", middleware.AuthRequired(), handler.Users)
+		admin.PUT("/users/:id/role", middleware.AuthRequired(), handler.UpdateUserRole)
 		admin.GET("/videos", middleware.AuthRequired(), handler.AdminVideos)
 		admin.PUT("/videos/:id/review", middleware.AuthRequired(), handler.Review)
 	}

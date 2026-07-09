@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 
@@ -17,8 +18,10 @@ import (
 	interactionhandler "github.com/My-TuDo/B-B/backend/internal/handler/interaction"
 	likehandler "github.com/My-TuDo/B-B/backend/internal/handler/like"
 	notificationhandler "github.com/My-TuDo/B-B/backend/internal/handler/notification"
+	qualityhandler "github.com/My-TuDo/B-B/backend/internal/handler/quality"
 	searchhandler "github.com/My-TuDo/B-B/backend/internal/handler/search"
 	taghandler "github.com/My-TuDo/B-B/backend/internal/handler/tag"
+	transcodehdlr "github.com/My-TuDo/B-B/backend/internal/handler/transcode"
 	userhandler "github.com/My-TuDo/B-B/backend/internal/handler/user"
 	videohandler "github.com/My-TuDo/B-B/backend/internal/handler/video"
 	"github.com/My-TuDo/B-B/backend/internal/middleware"
@@ -31,23 +34,29 @@ import (
 	historymodel "github.com/My-TuDo/B-B/backend/internal/model/history"
 	likemodel "github.com/My-TuDo/B-B/backend/internal/model/like"
 	messagemodel "github.com/My-TuDo/B-B/backend/internal/model/message"
-	messagerepo "github.com/My-TuDo/B-B/backend/internal/repository/message"
-	messageservice "github.com/My-TuDo/B-B/backend/internal/service/message"
+	metamodel "github.com/My-TuDo/B-B/backend/internal/model/meta"
+	qualitymodel "github.com/My-TuDo/B-B/backend/internal/model/quality"
 	tagmodel "github.com/My-TuDo/B-B/backend/internal/model/tag"
+	transcodemodel "github.com/My-TuDo/B-B/backend/internal/model/transcode"
 	usermodel "github.com/My-TuDo/B-B/backend/internal/model/user"
 	videomodel "github.com/My-TuDo/B-B/backend/internal/model/video"
+	messagerepo "github.com/My-TuDo/B-B/backend/internal/repository/message"
+	messageservice "github.com/My-TuDo/B-B/backend/internal/service/message"
 	adminrepo "github.com/My-TuDo/B-B/backend/internal/repository/admin"
 	creatorrepo "github.com/My-TuDo/B-B/backend/internal/repository/creator"
 	adminservice "github.com/My-TuDo/B-B/backend/internal/service/admin"
 	creatorservice "github.com/My-TuDo/B-B/backend/internal/service/creator"
+	"github.com/My-TuDo/B-B/backend/internal/worker"
 	"github.com/My-TuDo/B-B/backend/internal/ws"
 	"github.com/My-TuDo/B-B/backend/pkg/config"
 	"github.com/My-TuDo/B-B/backend/pkg/database"
 	"github.com/My-TuDo/B-B/backend/pkg/jwt"
 	"github.com/My-TuDo/B-B/backend/pkg/logger"
+	"github.com/My-TuDo/B-B/backend/pkg/rabbitmq"
 	"github.com/My-TuDo/B-B/backend/pkg/storage"
 	"github.com/My-TuDo/B-B/backend/pkg/validator"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -82,6 +91,9 @@ func main() {
 		&favoritemodel.FavoriteItem{},
 		&followmodel.Follow{},
 		&messagemodel.Message{},
+		&transcodemodel.TranscodeTask{},
+		&qualitymodel.VideoQuality{},
+		&metamodel.VideoMeta{},
 	); err != nil {
 		log.Fatalf("auto migrate failed: %v", err)
 	}
@@ -101,6 +113,42 @@ func main() {
 	// Seed categories if empty
 	seedCategories(db)
 
+	// Init RabbitMQ + transcode worker
+	rmqCfg := &rabbitmq.Config{
+		Host:     cfg.RabbitMQHost,
+		Port:     cfg.RabbitMQPort,
+		User:     cfg.RabbitMQUser,
+		Password: cfg.RabbitMQPass,
+	}
+	rmqClient, rmqErr := rabbitmq.Init(rmqCfg)
+	if rmqErr != nil {
+		logger.Warn("rabbitmq init failed, transcode will run without queue", zap.String("error", rmqErr.Error()))
+	} else {
+		logger.Info("rabbitmq connected")
+		defer rmqClient.Close()
+	}
+
+	// Start RabbitMQ consumer goroutine
+	if rmqClient != nil {
+		go func() {
+			deliveries, err := rmqClient.ConsumeTranscodeTask()
+			if err != nil {
+				logger.Error("rabbitmq consume failed", zap.Error(err))
+				return
+			}
+			for d := range deliveries {
+				var msg rabbitmq.TranscodeMessage
+				if err := json.Unmarshal(d.Body, &msg); err != nil {
+					logger.Error("rabbitmq unmarshal failed", zap.Error(err))
+					d.Nack(false, false)
+					continue
+				}
+				worker.ProcessVideo(msg.VideoID, db)
+				d.Ack(false)
+			}
+		}()
+	}
+
 	r := gin.New()
 
 	// Global middleware
@@ -118,7 +166,13 @@ func main() {
 	// Register routes
 	authhandler.RegisterRoutes(api, db, rdb)
 	userhandler.RegisterRoutes(api, db, rdb)
-	videohandler.RegisterRoutes(api, db, rdb)
+
+	// Build transcode publisher function
+	var transcodePublisher func(uint) error
+	if rmqClient != nil {
+		transcodePublisher = rmqClient.PublishTranscodeTask
+	}
+	videohandler.RegisterRoutes(api, db, rdb, transcodePublisher)
 	categoryhandler.RegisterRoutes(api, db)
 	taghandler.RegisterRoutes(api, db)
 	historyhandler.RegisterRoutes(api, db)
@@ -144,6 +198,8 @@ func main() {
 	followhandler.RegisterRoutes(api, db, messageSvc)
 	notificationhandler.RegisterRoutes(api, messageSvc)
 	interactionhandler.RegisterRoutes(api, db, rdb)
+	transcodehdlr.RegisterRoutes(api, db)
+	qualityhandler.RegisterRoutes(api, db)
 
 	addr := fmt.Sprintf(":%s", cfg.ServerPort)
 	logger.Info("server starting")
