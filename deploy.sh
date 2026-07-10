@@ -11,6 +11,18 @@ command -v docker >/dev/null 2>&1 || { echo "Error: docker not found"; exit 1; }
 echo "[Check] docker compose..."
 docker compose version >/dev/null 2>&1 || { echo "Error: docker compose not found"; exit 1; }
 
+# Ensure .env exists
+if [ ! -f "./.env" ]; then
+  if [ -f "./.env.example" ]; then
+    echo "[Env] Creating .env from .env.example..."
+    cp .env.example .env
+    echo "[Env] Edit .env to customize secrets, then re-run deploy.sh"
+    exit 0
+  else
+    echo "[Env] Warning: no .env or .env.example found"
+  fi
+fi
+
 # Generate self-signed SSL certificate if not exists
 if [ ! -f "./nginx/ssl/server.crt" ]; then
   echo "[SSL] Generating self-signed certificate..."
