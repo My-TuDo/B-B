@@ -83,7 +83,7 @@ func (s *Service) Register(ctx context.Context, req *usermodel.RegisterReq) (*us
 		ID:       user.ID,
 		Username: user.Username,
 		Nickname: user.Nickname,
-		Avatar:   presignAvatar(ctx, user.Avatar),
+		Avatar:   presignAvatar(user.Avatar),
 	}
 
 	return resp, token, nil
@@ -116,7 +116,7 @@ func (s *Service) Login(ctx context.Context, account, password string) (*usermod
 		ID:       user.ID,
 		Username: user.Username,
 		Nickname: user.Nickname,
-		Avatar:   presignAvatar(ctx, user.Avatar),
+		Avatar:   presignAvatar(user.Avatar),
 	}
 
 	return resp, token, nil
@@ -143,7 +143,7 @@ func (s *Service) GetMe(ctx context.Context, userID uint) (*usermodel.UserResp, 
 		ID:        user.ID,
 		Username:  user.Username,
 		Nickname:  user.Nickname,
-		Avatar:    presignAvatar(ctx, user.Avatar),
+		Avatar:    presignAvatar(user.Avatar),
 		Bio:       user.Bio,
 		CreatedAt: user.CreatedAt,
 	}, nil
@@ -190,12 +190,9 @@ func newError(code int) *Error {
 	return &Error{Code: code, Msg: errcode.Message(code)}
 }
 
-func presignAvatar(ctx context.Context, avatar string) string {
+func presignAvatar(avatar string) string {
 	if avatar == "" {
 		return ""
 	}
-	if url, err := storage.GetPresignedURL(ctx, avatar, time.Hour); err == nil {
-		return url
-	}
-	return "" // fallback: don't return unreadable raw key
+	return storage.GetObjectURL(avatar)
 }

@@ -308,9 +308,7 @@ func toVideoResp(ctx context.Context, v *videomodel.Video) *videomodel.VideoResp
 			Nickname: v.User.Nickname,
 		}
 		if v.User.Avatar != "" {
-			if url, err := storage.GetPresignedURL(ctx, v.User.Avatar, time.Hour); err == nil {
-				resp.User.Avatar = url
-			}
+			resp.User.Avatar = storage.GetObjectURL(v.User.Avatar)
 		}
 	}
 

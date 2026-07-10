@@ -29,12 +29,9 @@ func (s *Service) GetUser(ctx context.Context, id uint) (*usermodel.UserResp, er
 		return nil, fmt.Errorf("user.service.GetUser: %w", newError(errcode.UserNotFound))
 	}
 
-	// Generate presigned URL for avatar if set
-	avatar := user.Avatar
+	avatar := ""
 	if user.Avatar != "" {
-		if url, err := storage.GetPresignedURL(ctx, user.Avatar, time.Hour); err == nil {
-			avatar = url
-		}
+		avatar = storage.GetObjectURL(user.Avatar)
 	}
 
 	return &usermodel.UserResp{
@@ -70,12 +67,9 @@ func (s *Service) UpdateUser(ctx context.Context, id uint, req *usermodel.Update
 		return nil, fmt.Errorf("user.service.UpdateUser: %w", err)
 	}
 
-	// Generate presigned URL for avatar if set
-	avatar := user.Avatar
+	avatar := ""
 	if user.Avatar != "" {
-		if url, err := storage.GetPresignedURL(ctx, user.Avatar, time.Hour); err == nil {
-			avatar = url
-		}
+		avatar = storage.GetObjectURL(user.Avatar)
 	}
 
 	return &usermodel.UserResp{

@@ -98,11 +98,7 @@ func (s *Service) List(ctx context.Context, userID uint, page, pageSize int) (*h
 			}
 		}
 		if items[i].Video.User != nil && items[i].Video.User.Avatar != "" {
-			if url, err := storage.GetPresignedURL(ctx, items[i].Video.User.Avatar, time.Hour); err == nil {
-				items[i].Video.User.Avatar = url
-			} else {
-				items[i].Video.User.Avatar = ""
-			}
+			items[i].Video.User.Avatar = storage.GetObjectURL(items[i].Video.User.Avatar)
 		}
 	}
 
