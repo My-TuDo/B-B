@@ -47,13 +47,7 @@ if not exist "nginx\ssl\server.crt" (
     if not exist "nginx\ssl" mkdir nginx\ssl
 
     :: Use Docker to generate cert (avoids needing OpenSSL on host)
-    docker run --rm -v "%CD%\nginx\ssl:/ssl" alpine:3.19 sh -c "\
-        apk add --no-cache openssl >/dev/null 2>&1 && \
-        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-            -keyout /ssl/server.key \
-            -out /ssl/server.crt \
-            -subj '/C=CN/ST=Shanghai/L=Shanghai/O=B-B/OU=Dev/CN=localhost' \
-            >/dev/null 2>&1" >nul 2>&1
+    docker run --rm -v "%CD%\nginx\ssl:/ssl" alpine:3.19 sh -c "apk add --no-cache openssl && openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /ssl/server.key -out /ssl/server.crt -subj '/C=CN/ST=Shanghai/L=Shanghai/O=B-B/OU=Dev/CN=localhost'" >nul 2>&1
     if %errorlevel% neq 0 (
         echo [SSL] Failed to generate certificate via Docker.
         echo [SSL] Make sure Docker is running and try again.
@@ -62,6 +56,24 @@ if not exist "nginx\ssl\server.crt" (
     )
     echo [SSL] Certificate generated
 )
+
+:: ---- Check Docker Hub connectivity ----
+echo [Network] Checking Docker Hub connectivity...
+docker pull alpine:3.19 --quiet >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [Network] Cannot reach Docker Hub (registry-1.docker.io).
+    echo.
+    echo If you are in China, configure a Docker mirror:
+    echo   1. Open Docker Desktop Settings -^> Docker Engine
+    echo   2. Add to the JSON:
+    echo      "registry-mirrors": ["https://docker.m.daocloud.io","https://docker.1panel.live"]
+    echo   3. Click "Apply ^& Restart"
+    echo   4. Re-run deploy.bat
+    echo.
+    pause
+    exit /b 1
+)
+echo [Network] OK
 
 :: ---- Build and start ----
 echo [Docker] Building images...
