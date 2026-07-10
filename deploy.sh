@@ -67,7 +67,7 @@ docker compose up -d
 # ---- 6. Health check ----
 log "6/6" "Waiting for backend..."
 for i in $(seq 1 30); do
-  if curl -sk https://localhost/api/v1/categories/ >/dev/null 2>&1; then
+  if curl -sk https://localhost:8443/api/v1/categories/ >/dev/null 2>&1; then
     log "6/6" "Backend is ready!"
     break
   fi
@@ -76,7 +76,7 @@ done
 
 echo ""
 echo -e "${GRN}=== Deploy Complete ===${NC}"
-echo "  Frontend: https://localhost"
-echo "  API:      https://localhost/api/v1"
+echo "  Frontend: https://localhost:8443"
+echo "  API:      https://localhost:8443/api/v1"
 echo "  MinIO:    http://localhost:9001"
 echo ""

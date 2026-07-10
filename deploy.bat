@@ -87,7 +87,7 @@ if %errorlevel% neq 0 (
 :: ---- 6. Health check ----
 echo [6/6] Waiting for backend...
 for /l %%i in (1,1,30) do (
-    curl -sk https://localhost/api/v1/categories/ >nul 2>&1
+    curl -sk https://localhost:8443/api/v1/categories/ >nul 2>&1
     if !errorlevel! equ 0 (
         echo [6/6] Backend is ready!
         goto :done
@@ -98,8 +98,8 @@ for /l %%i in (1,1,30) do (
 
 echo.
 echo ==================== Deploy Complete ====================
-echo   Frontend: https://localhost
-echo   API:      https://localhost/api/v1
+echo   Frontend: https://localhost:8443
+echo   API:      https://localhost:8443/api/v1
 echo   MinIO:    http://localhost:9001
 echo.
 pause
