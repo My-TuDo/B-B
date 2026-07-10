@@ -41,7 +41,7 @@ if not exist "nginx\ssl\server.crt" (
     echo [3/6] Generating self-signed SSL certificate...
     if not exist "nginx\ssl" mkdir nginx\ssl
 
-    docker run --rm -v "%CD%\nginx\ssl:/ssl" alpine:3.19 sh -c "sed -i 's/dl-cdn.alpinelinux.org/mirrors.ustc.edu.cn/g' /etc/apk/repositories && apk add --no-cache openssl && openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /ssl/server.key -out /ssl/server.crt -subj '/C=CN/ST=Shanghai/L=Shanghai/O=B-B/OU=Dev/CN=localhost'" >nul 2>&1
+    docker run --rm -v "%CD%\nginx\ssl:/ssl" alpine:3.19 sh -c "sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories && apk add --no-cache openssl && openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /ssl/server.key -out /ssl/server.crt -subj '/C=CN/ST=Shanghai/L=Shanghai/O=B-B/OU=Dev/CN=localhost'" >nul 2>&1
     if %errorlevel% neq 0 (
         echo [ERR] Failed to generate SSL certificate. Is Docker running?
         pause & exit /b 1

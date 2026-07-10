@@ -91,7 +91,7 @@ services:
       dockerfile: docker/Dockerfile
       args:
         GOPROXY: ${GOPROXY}
-        APK_MIRROR: ${APK_MIRROR:-mirrors.ustc.edu.cn}
+        APK_MIRROR: ${APK_MIRROR:-mirrors.aliyun.com}
     container_name: bb-backend
     restart: unless-stopped
     expose:
@@ -146,7 +146,7 @@ services:
     build:
       context: ./nginx
       args:
-        APK_MIRROR: ${APK_MIRROR:-mirrors.ustc.edu.cn}
+        APK_MIRROR: ${APK_MIRROR:-mirrors.aliyun.com}
     container_name: bb-nginx
     restart: unless-stopped
     ports:
