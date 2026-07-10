@@ -1,5 +1,10 @@
 FROM nginx:alpine
 
+ARG APK_MIRROR=mirrors.ustc.edu.cn
+RUN if [ -n "${APK_MIRROR}" ]; then \
+      sed -i "s/dl-cdn.alpinelinux.org/${APK_MIRROR}/g" /etc/apk/repositories; \
+    fi
+
 RUN apk add --no-cache openssl
 
 # Generate self-signed certificate on startup

@@ -91,6 +91,7 @@ services:
       dockerfile: docker/Dockerfile
       args:
         GOPROXY: ${GOPROXY}
+        APK_MIRROR: ${APK_MIRROR}
     container_name: bb-backend
     restart: unless-stopped
     expose:
@@ -144,6 +145,8 @@ services:
   nginx:
     build:
       context: ./nginx
+      args:
+        APK_MIRROR: ${APK_MIRROR}
     container_name: bb-nginx
     restart: unless-stopped
     ports:
