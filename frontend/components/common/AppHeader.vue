@@ -256,13 +256,18 @@ function stopPolling() {
   }
 }
 
+// Debounce to avoid spawning multiple pollers when isLoggedIn flickers
+let pollDebounce: ReturnType<typeof setTimeout> | null = null
 watch(() => userStore.isLoggedIn, (loggedIn) => {
-  if (loggedIn) {
-    startPolling()
-  } else {
-    stopPolling()
-    userStore.clearUnread()
-  }
+  if (pollDebounce) clearTimeout(pollDebounce)
+  pollDebounce = setTimeout(() => {
+    if (loggedIn) {
+      startPolling()
+    } else {
+      stopPolling()
+      userStore.clearUnread()
+    }
+  }, 200)
 })
 
 let closeTimer: ReturnType<typeof setTimeout> | null = null

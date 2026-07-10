@@ -16,9 +16,7 @@
         <!-- Video player with danmaku layer -->
         <div class="relative w-full bg-black rounded-[var(--radius-lg)] overflow-hidden shadow-lg shadow-black/30 ring-1 ring-white/5">
           <video
-            v-if="playUrl"
             ref="videoPlayerRef"
-            :key="playUrl"
             controls
             class="w-full"
             style="aspect-ratio: 16/9"
@@ -29,12 +27,8 @@
             @seeked="onSeeked"
             @timeupdate="onTimeUpdate"
           >
-            <source :src="playUrl" type="video/mp4" />
             您的浏览器不支持视频播放
           </video>
-          <div v-else class="flex items-center justify-center" style="aspect-ratio: 16/9">
-            <LoadingSpinner size="lg" />
-          </div>
 
           <!-- Danmaku layer overlay -->
           <DanmakuLayer
@@ -351,6 +345,7 @@ const video = ref<VideoInfo | null>(null)
 const tags = ref<Tag[]>([])
 const relatedVideos = ref<VideoInfo[]>([])
 const playUrl = ref('')
+const fallbackMp4Url = ref('')  // pre-signed MP4 URL, target for ALL HLS fallback paths
 const loading = ref(true)
 const error = ref('')
 const showFullDesc = ref(false)
@@ -391,6 +386,14 @@ const isFavorited = computed(() => interactions.value.favorited || favoritedFold
 let favPressTimer: ReturnType<typeof setTimeout> | null = null
 let isLongPress = false
 let crossReferenced = false
+
+// HLS state
+let hlsModule: typeof import('hls.js') | null = null
+let hlsLoadPromise: Promise<void> | null = null
+const hlsInstance = ref<any>(null)
+const isQualitySwitching = ref(false)
+let pendingSeekTime = 0
+let pendingAutoPlay = false
 
 const transcodeStatusClass = computed(() => {
   if (!transcodeStatus.value) return ''
@@ -706,6 +709,76 @@ async function crossReferenceFavorites() {
   crossReferenced = true
 }
 
+// HLS engine
+async function ensureHlsReady(): Promise<boolean> {
+  if (hlsModule) return true
+  if (!hlsLoadPromise) {
+    hlsLoadPromise = import('hls.js').then(m => { hlsModule = m }).catch(() => { hlsLoadPromise = null })
+  }
+  try { await hlsLoadPromise; return hlsModule != null } catch { return false }
+}
+
+function destroyHLS() {
+  if (hlsInstance.value) {
+    try { hlsInstance.value.destroy() } catch { /* ignore */ }
+    hlsInstance.value = null
+  }
+}
+
+async function startHls(url: string) {
+  const videoEl = videoPlayerRef.value
+  if (!videoEl || !url) return
+
+  await ensureHlsReady()
+  if (!hlsModule) { videoEl.src = fallbackMp4Url.value; videoEl.load(); return }
+
+  const Hls = hlsModule.default || (hlsModule as any).Hls
+  if (!Hls || !Hls.isSupported()) { videoEl.src = fallbackMp4Url.value; videoEl.load(); return }
+
+  destroyHLS()
+  const hls = new Hls()
+  hls.on(Hls.Events.ERROR, (_evt: any, data: any) => {
+    if (data.fatal) { destroyHLS(); videoEl.src = fallbackMp4Url.value; videoEl.load() }
+  })
+  hls.on(Hls.Events.MANIFEST_PARSED, () => {
+    const el = videoPlayerRef.value
+    if (!el) return
+    if (pendingSeekTime > 0) { el.currentTime = pendingSeekTime; pendingSeekTime = 0 }
+    if (pendingAutoPlay) { pendingAutoPlay = false; el.play().catch(() => {}) }
+    if (!isQualitySwitching.value) { el.currentTime = 0 }
+    isQualitySwitching.value = false
+  })
+  hls.loadSource(url)
+  hls.attachMedia(videoEl)
+  hlsInstance.value = hls
+
+  // Safety net: if no data after 4s, fall back to mp4
+  const hlsRef = hls
+  setTimeout(() => {
+    const el = videoPlayerRef.value
+    if (el && !el.currentSrc && hlsInstance.value === hlsRef) {
+      destroyHLS()
+      el.src = fallbackMp4Url.value
+      el.load()
+    }
+  }, 4000)
+}
+
+async function initPlayer() {
+  const url = playUrl.value
+  if (!url) return
+  await nextTick()
+  const videoEl = videoPlayerRef.value
+  if (!videoEl) return
+
+  if (!url.includes('.m3u8')) {
+    videoEl.src = url
+    videoEl.load()
+    return
+  }
+  await startHls(url)
+}
+
 async function fetchVideo() {
   loading.value = true
   error.value = ''
@@ -726,7 +799,16 @@ async function fetchVideo() {
     startTranscodePolling()
 
     const playData = await get<{ play_url: string }>(`/api/v1/videos/${id}/play-url`)
-    playUrl.value = playData.play_url
+    fallbackMp4Url.value = playData.play_url
+
+    // Set initial playUrl: prefer best quality m3u8, fall back to mp4
+    if (qualities.value.length > 0) {
+      const best = qualities.value[qualities.value.length - 1] // highest quality last
+      playUrl.value = best.play_url
+      currentQuality.value = best.quality
+    } else {
+      playUrl.value = playData.play_url
+    }
 
     const urlTime = parseInt(route.query.t as string)
     if (!isNaN(urlTime) && urlTime > 0) {
@@ -765,6 +847,11 @@ async function fetchVideo() {
       })
       relatedVideos.value = (related.items || []).filter((v) => v.id !== video.value?.id).slice(0, 8)
     }
+    // Ensure DOM is ready before setting video src
+    loading.value = false
+    await nextTick()
+    // Start playback
+    await initPlayer()
   } catch (err) {
     error.value = err instanceof Error ? err.message : '加载视频失败'
   } finally {
@@ -786,17 +873,19 @@ function formatTime(dateStr: string): string {
 async function switchQuality(q: VideoQualityType) {
   const videoEl = videoPlayerRef.value
   if (!videoEl) return
-  const savedTime = videoEl.currentTime
-  const wasPlaying = !videoEl.paused
+  pendingSeekTime = videoEl.currentTime
+  pendingAutoPlay = !videoEl.paused
+  isQualitySwitching.value = true
   currentQuality.value = q.quality
-  playUrl.value = q.play_url
   showQualityPicker.value = false
-  // Wait for video to load new source then restore time
-  videoEl.addEventListener('loadedmetadata', function handler() {
-    videoEl.currentTime = savedTime
-    if (wasPlaying) videoEl.play()
-    videoEl.removeEventListener('loadedmetadata', handler)
-  }, { once: true })
+  playUrl.value = q.play_url  // keep watch compatibility
+
+  if (q.play_url.includes('.m3u8')) {
+    await startHls(q.play_url)
+  } else {
+    videoEl.src = q.play_url
+    videoEl.load()
+  }
 }
 
 // Transcode status
@@ -827,10 +916,14 @@ function stopTranscodePolling() {
   }
 }
 
-onMounted(fetchVideo)
+onMounted(() => {
+  ensureHlsReady()  // preload hls.js in parallel with fetchVideo
+  fetchVideo()
+})
 onUnmounted(() => {
   stopHistoryRecording()
   stopTranscodePolling()
+  destroyHLS()
   if (seekTimer) clearTimeout(seekTimer)
 })
 </script>

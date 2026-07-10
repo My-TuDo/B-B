@@ -3,7 +3,6 @@ package message
 import (
 	"context"
 	"fmt"
-	"time"
 
 	messagemodel "github.com/My-TuDo/B-B/backend/internal/model/message"
 	usermodel "github.com/My-TuDo/B-B/backend/internal/model/user"
@@ -46,11 +45,9 @@ func (s *Service) GetNotifications(ctx context.Context, userID uint, page, pageS
 			CreatedAt: m.CreatedAt,
 		}
 		if m.FromUser.ID != 0 {
-			avatar := m.FromUser.Avatar
-			if avatar != "" {
-				if url, err := storage.GetPresignedURL(ctx, avatar, time.Hour); err == nil {
-					avatar = url
-				}
+			avatar := ""
+			if m.FromUser.Avatar != "" {
+				avatar = storage.GetObjectURL(m.FromUser.Avatar)
 			}
 			items[i].FromUser = &usermodel.UserBrief{
 				ID:       m.FromUser.ID,

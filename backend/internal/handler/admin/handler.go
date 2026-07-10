@@ -154,6 +154,18 @@ func (h *Handler) Users(c *gin.Context) {
 	})
 }
 
+// System returns server configuration and status info. role >= 3 only.
+func (h *Handler) System(c *gin.Context) {
+	role := middleware.GetRole(c)
+	if role < 3 {
+		response.Error(c, http.StatusForbidden, errcode.Forbidden, errcode.Message(errcode.Forbidden))
+		return
+	}
+
+	sysInfo := getSystemInfo(h.db, c.Request.Context())
+	response.Success(c, sysInfo)
+}
+
 // UpdateUserRole changes a user's role. role >= 3 only.
 func (h *Handler) UpdateUserRole(c *gin.Context) {
 	role := middleware.GetRole(c)

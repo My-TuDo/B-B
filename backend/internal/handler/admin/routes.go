@@ -19,5 +19,6 @@ func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, adminSvc *adminservice.Serv
 		admin.PUT("/users/:id/role", middleware.AuthRequired(), handler.UpdateUserRole)
 		admin.GET("/videos", middleware.AuthRequired(), handler.AdminVideos)
 		admin.PUT("/videos/:id/review", middleware.AuthRequired(), handler.Review)
+		admin.GET("/system", middleware.AuthRequired(), handler.System)
 	}
 }

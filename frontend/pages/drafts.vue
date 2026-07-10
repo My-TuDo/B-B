@@ -59,6 +59,17 @@
               >
                 {{ video.status === 0 ? '草稿' : '已发布' }}
               </span>
+              <!-- Transcode status for draft videos -->
+              <span
+                v-if="video.status === 0 && draftTranscodes[video.id] !== undefined && draftTranscodes[video.id] !== 'ready'"
+                :class="[
+                  'inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-[var(--radius-full)]',
+                  draftTranscodes[video.id] === 'failed' ? 'bg-red-500/15 text-red-400' : 'bg-yellow-500/15 text-yellow-400'
+                ]"
+              >
+                <svg v-if="draftTranscodes[video.id] !== 'failed'" class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                {{ transcodeLabel(draftTranscodes[video.id]) }}
+              </span>
             </div>
             <p class="text-xs text-[var(--color-text-secondary)] mt-1">
               上传于 {{ formatTime(video.created_at) }} · {{ formatFileSize(video.file_size) }}
@@ -76,10 +87,12 @@
             </template>
             <template v-else>
               <button
-                class="px-4 py-1.5 text-sm bg-[var(--color-primary)] text-white rounded-[var(--radius-full)] hover:bg-[var(--color-primary-hover)] transition-colors"
+                class="px-4 py-1.5 text-sm bg-[var(--color-primary)] text-white rounded-[var(--radius-full)] hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                :disabled="draftTranscodes[video.id] !== undefined && draftTranscodes[video.id] !== 'ready' && draftTranscodes[video.id] !== 'failed'"
+                :title="getPublishDisabledTitle(video)"
                 @click="publishDraft(video)"
               >
-                发布
+                {{ getPublishButtonText(video) }}
               </button>
               <button
                 class="px-4 py-1.5 text-sm bg-[var(--color-surface-hover)] text-[var(--color-text)] rounded-[var(--radius-full)] hover:bg-[var(--color-border)] transition-colors"
@@ -207,7 +220,7 @@
 import { useApi } from '~/composables/useApi'
 import { useUserStore } from '~/stores/userStore'
 import { useToast } from '~/composables/useToast'
-import type { VideoInfo, PaginatedData, Tag, Category } from '~/types'
+import type { VideoInfo, PaginatedData, Tag, Category, TranscodeStatus } from '~/types'
 import AppModal from '~/components/common/AppModal.vue'
 
 definePageMeta({
@@ -234,6 +247,8 @@ const editForm = ref({ title: '', description: '', category_id: 0, tags: [] as T
 const editTagInput = ref('')
 const allTags = ref<Tag[]>([])
 const categories = ref<Category[]>([])
+const draftTranscodes = ref<Record<number, string>>({})
+let transcodePollTimer: ReturnType<typeof setInterval> | null = null
 
 const emptyMessage = computed(() => {
   switch (activeTab.value) {
@@ -246,6 +261,21 @@ const emptyMessage = computed(() => {
 watch(activeTab, () => {
   fetchVideos()
 })
+
+function getPublishButtonText(video: VideoInfo): string {
+  const status = draftTranscodes.value[video.id]
+  if (status === undefined || status === 'ready') return '发布'
+  if (status === 'failed') return '发布（转码失败）'
+  const pct = parseInt(status)
+  if (!isNaN(pct) && pct > 0) return `发布（${pct}%）`
+  return '发布（转码中）'
+}
+
+function getPublishDisabledTitle(video: VideoInfo): string {
+  const status = draftTranscodes.value[video.id]
+  if (status === undefined || status === 'ready' || status === 'failed') return ''
+  return '转码完成前无法发布'
+}
 
 async function fetchVideos() {
   if (!userStore.userInfo) {
@@ -386,6 +416,7 @@ function formatFileSize(bytes: number): string {
 
 onMounted(async () => {
   await fetchVideos()
+  startTranscodePolling()
   try {
     const [tags, cats] = await Promise.all([
       get<Tag[]>('/api/v1/tags/'),
@@ -394,5 +425,62 @@ onMounted(async () => {
     allTags.value = tags || []
     categories.value = cats || []
   } catch { /* non-critical */ }
+})
+
+// Transcode polling for drafts
+async function fetchDraftTranscodeStatus() {
+  for (const v of drafts.value) {
+    if (v.status !== 0) continue
+    try {
+      const ts = await get<TranscodeStatus>(`/api/v1/videos/${v.id}/transcode-status`)
+      if (ts.status === 2) {
+        draftTranscodes.value[v.id] = 'ready'
+      } else if (ts.status === 3) {
+        draftTranscodes.value[v.id] = 'failed'
+      } else {
+        draftTranscodes.value[v.id] = ts.progress !== undefined ? String(ts.progress) : '0'
+      }
+    } catch {
+      draftTranscodes.value[v.id] = 'ready'
+    }
+  }
+}
+
+function transcodeLabel(status: string): string {
+  if (status === 'ready') return ''
+  if (status === 'failed') return '转码失败'
+  const pct = parseInt(status)
+  if (!isNaN(pct) && pct > 0) {
+    return `转码中 ${pct}%`
+  }
+  return '转码中...'
+}
+
+function startTranscodePolling() {
+  stopTranscodePolling()
+  fetchDraftTranscodeStatus()
+  transcodePollTimer = setInterval(() => {
+    const allReady = drafts.value.length === 0 || drafts.value.every(v => {
+      if (v.status !== 0) return true
+      const s = draftTranscodes.value[v.id]
+      return s === 'ready' || s === 'failed' || s === undefined
+    })
+    if (allReady) {
+      stopTranscodePolling()
+      return
+    }
+    fetchDraftTranscodeStatus()
+  }, 3000)
+}
+
+function stopTranscodePolling() {
+  if (transcodePollTimer) {
+    clearInterval(transcodePollTimer)
+    transcodePollTimer = null
+  }
+}
+
+onUnmounted(() => {
+  stopTranscodePolling()
 })
 </script>

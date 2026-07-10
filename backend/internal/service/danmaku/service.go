@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	danmakumodel "github.com/My-TuDo/B-B/backend/internal/model/danmaku"
 	usermodel "github.com/My-TuDo/B-B/backend/internal/model/user"
@@ -148,11 +147,9 @@ func toDanmakuResp(ctx context.Context, d *danmakumodel.Danmaku) *danmakumodel.D
 		PlayTime: d.PlayTime,
 	}
 	if d.User.ID != 0 {
-		avatar := d.User.Avatar
-		if avatar != "" {
-			if url, err := storage.GetPresignedURL(ctx, avatar, time.Hour); err == nil {
-				avatar = url
-			}
+		avatar := ""
+		if d.User.Avatar != "" {
+			avatar = storage.GetObjectURL(d.User.Avatar)
 		}
 		resp.User = &usermodel.UserBrief{
 			ID:       d.User.ID,

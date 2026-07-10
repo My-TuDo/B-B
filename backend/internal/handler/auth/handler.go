@@ -173,5 +173,5 @@ func setCookie(c *gin.Context, token string) {
 }
 
 func formatValidationErr(err error) string {
-	return err.Error()
+	return "请求参数验证失败"
 }

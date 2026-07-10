@@ -9,21 +9,25 @@ import (
 	"strconv"
 	"time"
 
+	tmodel "github.com/My-TuDo/B-B/backend/internal/model/transcode"
 	usermodel "github.com/My-TuDo/B-B/backend/internal/model/user"
 	videomodel "github.com/My-TuDo/B-B/backend/internal/model/video"
 	videorepo "github.com/My-TuDo/B-B/backend/internal/repository/video"
+	"github.com/My-TuDo/B-B/backend/internal/worker"
 	"github.com/My-TuDo/B-B/backend/pkg/errcode"
 	"github.com/My-TuDo/B-B/backend/pkg/logger"
 	"github.com/My-TuDo/B-B/backend/pkg/storage"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 type Service struct {
-	repo    *videorepo.Repository
-	rdb     *redis.Client
+	repo       *videorepo.Repository
+	rdb        *redis.Client
 	rmqPublish func(videoID uint) error
+	db         *gorm.DB
 }
 
 func NewService(repo *videorepo.Repository) *Service {
@@ -37,6 +41,11 @@ func NewServiceWithRedis(repo *videorepo.Repository, rdb *redis.Client) *Service
 // SetTranscodePublisher sets the function used to publish transcode tasks after upload.
 func (s *Service) SetTranscodePublisher(fn func(videoID uint) error) {
 	s.rmqPublish = fn
+}
+
+// SetDB sets the database connection for fallback direct processing.
+func (s *Service) SetDB(db *gorm.DB) {
+	s.db = db
 }
 
 func (s *Service) UploadVideo(ctx context.Context, userID uint, file io.Reader, fileName string, fileSize int64, contentType string, title, description string, categoryID uint, progressFn func(uploaded, total int64), coverFile multipart.File, coverHeader *multipart.FileHeader) (*videomodel.VideoResp, error) {
@@ -172,6 +181,21 @@ func (s *Service) UpdateVideo(ctx context.Context, userID uint, videoID uint, re
 		video.CategoryID = *req.CategoryID
 	}
 	if req.Status != nil {
+		// If publishing (status=1), block until transcode is complete
+		if *req.Status == 1 {
+			var task tmodel.TranscodeTask
+			if err := s.db.WithContext(ctx).Where("video_id = ?", videoID).First(&task).Error; err == nil {
+				if task.Status != tmodel.StatusDone {
+					switch task.Status {
+					case tmodel.StatusFailed:
+						return nil, fmt.Errorf("video.service.UpdateVideo: 转码失败，无法发布。请重新上传视频")
+					default:
+						return nil, fmt.Errorf("video.service.UpdateVideo: 转码未完成 (%d%%)，请等待转码结束后再发布", task.Progress)
+					}
+				}
+			}
+			// No transcode task at all — ffmpeg not available, allow publish with raw mp4
+		}
 		video.Status = *req.Status
 	}
 
@@ -625,10 +649,17 @@ func (s *Service) triggerTranscode(videoID uint) {
 	if s.rmqPublish != nil {
 		go func() {
 			if err := s.rmqPublish(videoID); err != nil {
-				logger.Warn("trigger transcode publish failed", zap.Uint("video_id", videoID), zap.Error(err))
+				logger.Warn("trigger transcode publish failed, falling back to direct processing", zap.Uint("video_id", videoID), zap.Error(err))
 				// Fallback: process directly in a goroutine
-				// We'd need db access here, so just log the warning
+				if s.db != nil {
+					go worker.ProcessVideo(videoID, s.db)
+				}
 			}
 		}()
+	} else {
+		// No RabbitMQ at all, process directly
+		if s.db != nil {
+			go worker.ProcessVideo(videoID, s.db)
+		}
 	}
 }

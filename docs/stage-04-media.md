@@ -1,6 +1,6 @@
 ---
 stage: 阶段四：媒体处理
-status: human-testing
+status: locked
 created: 2026-07-08
 gate1_by:
 locked_by:

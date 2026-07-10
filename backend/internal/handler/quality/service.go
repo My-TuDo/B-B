@@ -3,7 +3,6 @@ package quality
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/My-TuDo/B-B/backend/pkg/storage"
 )
@@ -30,14 +29,13 @@ func (s *Service) GetQualities(ctx context.Context, videoID uint) ([]QualityInfo
 
 	result := make([]QualityInfo, 0, len(qualities))
 	for _, q := range qualities {
-		url, presignErr := storage.GetPresignedURL(ctx, q.ObjectName, time.Hour)
-		if presignErr != nil {
-			// Skip qualities whose presigned URL cannot be generated
-			continue
-		}
+		// HLS playback needs a stable URL without presigned query params so
+		// Video.js can resolve relative .ts segment paths (e.g. seg_000.ts).
+		// The bucket is public-download so unauthenticated GETs succeed.
+		playURL := storage.GetObjectURL(q.ObjectName)
 		result = append(result, QualityInfo{
 			Quality:  q.Quality,
-			PlayURL:  url,
+			PlayURL:  playURL,
 			FileSize: q.FileSize,
 		})
 	}

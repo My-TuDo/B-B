@@ -4,10 +4,10 @@ services:
     container_name: bb-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_ROOT_PASSWORD: [redacted]
       MYSQL_DATABASE: bb
       MYSQL_USER: bb_user
-      MYSQL_PASSWORD: bb_password
+      MYSQL_PASSWORD: [redacted]
     ports:
       - "3307:3306"
     volumes:
@@ -56,9 +56,8 @@ services:
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_PASSWORD: [redacted]
     ports:
-      - "9000:9000"
       - "9001:9001"
     volumes:
       - minio_data:/data
@@ -88,24 +87,24 @@ services:
       dockerfile: docker/Dockerfile
     container_name: bb-backend
     restart: unless-stopped
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     environment:
       SERVER_PORT: "8080"
       DB_HOST: mysql
       DB_PORT: "3306"
       DB_USER: bb_user
-      DB_PASSWORD: bb_password
+      DB_PASSWORD: [redacted]
       DB_NAME: bb
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ""
       MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
+      MINIO_ACCESS_KEY: [redacted]
+      MINIO_SECRET_KEY: [redacted]
       MINIO_BUCKET: bb-videos
       MINIO_USE_SSL: "false"
-      JWT_SECRET: dev-secret-change-in-production
+      JWT_SECRET: dev-***********************tion
       LOG_LEVEL: debug
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: "5672"
@@ -127,10 +126,22 @@ services:
       dockerfile: docker/Dockerfile
     container_name: bb-frontend
     restart: unless-stopped
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     depends_on:
       - backend
+
+  nginx:
+    build:
+      context: ./nginx
+    container_name: bb-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+      - frontend
 
 volumes:
   mysql_data:

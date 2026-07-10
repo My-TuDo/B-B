@@ -3,7 +3,6 @@ package follow
 import (
 	"context"
 	"fmt"
-	"time"
 
 	followmodel "github.com/My-TuDo/B-B/backend/internal/model/follow"
 	usermodel "github.com/My-TuDo/B-B/backend/internal/model/user"
@@ -91,11 +90,9 @@ func (s *Service) GetFollowers(ctx context.Context, userID uint, page, pageSize 
 
 	items := make([]usermodel.UserBrief, len(users))
 	for i, u := range users {
-		avatar := u.Avatar
-		if avatar != "" {
-			if url, err := storage.GetPresignedURL(ctx, avatar, time.Hour); err == nil {
-				avatar = url
-			}
+		avatar := ""
+		if u.Avatar != "" {
+			avatar = storage.GetObjectURL(u.Avatar)
 		}
 		items[i] = usermodel.UserBrief{
 			ID:       u.ID,
@@ -124,11 +121,9 @@ func (s *Service) GetFollowing(ctx context.Context, userID uint, page, pageSize 
 
 	items := make([]usermodel.UserBrief, len(users))
 	for i, u := range users {
-		avatar := u.Avatar
-		if avatar != "" {
-			if url, err := storage.GetPresignedURL(ctx, avatar, time.Hour); err == nil {
-				avatar = url
-			}
+		avatar := ""
+		if u.Avatar != "" {
+			avatar = storage.GetObjectURL(u.Avatar)
 		}
 		items[i] = usermodel.UserBrief{
 			ID:       u.ID,
@@ -154,11 +149,9 @@ func (s *Service) GetProfile(ctx context.Context, targetUserID uint, viewerID ui
 	followers, _ := s.repo.CountFollowers(ctx, targetUserID)
 	following, _ := s.repo.CountFollowing(ctx, targetUserID)
 
-	avatar := u.Avatar
-	if avatar != "" {
-		if url, err := storage.GetPresignedURL(ctx, avatar, time.Hour); err == nil {
-			avatar = url
-		}
+	avatar := ""
+	if u.Avatar != "" {
+		avatar = storage.GetObjectURL(u.Avatar)
 	}
 
 	return &followmodel.ProfileResp{
@@ -223,11 +216,9 @@ func (s *Service) GetFeed(ctx context.Context, userID uint, page, pageSize int) 
 			UpdatedAt:   v.UpdatedAt,
 		}
 		if v.User.ID != 0 {
-			avatar := v.User.Avatar
-			if avatar != "" {
-				if url, err := storage.GetPresignedURL(ctx, avatar, time.Hour); err == nil {
-					avatar = url
-				}
+			avatar := ""
+			if v.User.Avatar != "" {
+				avatar = storage.GetObjectURL(v.User.Avatar)
 			}
 			items[i].User = &usermodel.UserBrief{
 				ID:       v.User.ID,
@@ -235,6 +226,10 @@ func (s *Service) GetFeed(ctx context.Context, userID uint, page, pageSize int) 
 				Nickname: v.User.Nickname,
 				Avatar:   avatar,
 			}
+		}
+		// Presign cover URL — use direct public URL since bucket is public
+		if items[i].CoverURL != "" {
+			items[i].CoverURL = storage.GetObjectURL(items[i].CoverURL)
 		}
 	}
 

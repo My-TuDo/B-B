@@ -2,6 +2,7 @@ package logger
 
 import (
 	"os"
+	"strings"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -37,19 +38,19 @@ func Init(level string) {
 }
 
 func Debug(msg string, fields ...zap.Field) {
-	Logger.Debug(msg, sanitizeFields(fields)...)
+	Logger.Debug(sanitizeMsg(msg), sanitizeFields(fields)...)
 }
 
 func Info(msg string, fields ...zap.Field) {
-	Logger.Info(msg, sanitizeFields(fields)...)
+	Logger.Info(sanitizeMsg(msg), sanitizeFields(fields)...)
 }
 
 func Warn(msg string, fields ...zap.Field) {
-	Logger.Warn(msg, sanitizeFields(fields)...)
+	Logger.Warn(sanitizeMsg(msg), sanitizeFields(fields)...)
 }
 
 func Error(msg string, fields ...zap.Field) {
-	Logger.Error(msg, sanitizeFields(fields)...)
+	Logger.Error(sanitizeMsg(msg), sanitizeFields(fields)...)
 }
 
 // sensitiveFields contains field keys that should be masked in logs.
@@ -71,4 +72,20 @@ func sanitizeFields(fields []zap.Field) []zap.Field {
 		}
 	}
 	return result
+}
+
+// sanitizeMsg redacts sensitive patterns from log messages.
+func sanitizeMsg(msg string) string {
+	// Redact AMQP DSN patterns like amqp://user:pass@host:port/
+	idx := strings.Index(msg, "amqp://")
+	if idx < 0 {
+		return msg
+	}
+	// Find the @ after amqp:// to locate the auth boundary
+	rest := msg[idx+len("amqp://"):]
+	atIdx := strings.Index(rest, "@")
+	if atIdx < 0 {
+		return msg
+	}
+	return msg[:idx+len("amqp://")] + "[REDACTED]" + rest[atIdx:]
 }

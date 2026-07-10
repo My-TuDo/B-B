@@ -1,6 +1,3 @@
-# If you prefer the allow list template instead of the deny list, see community template:
-# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
-#
 # Binaries for programs and plugins
 *.exe
 *.exe~
@@ -17,15 +14,17 @@ coverage.*
 *.coverprofile
 profile.cov
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
+# Dependency directories
+vendor/
 
 # Go workspace file
 go.work
 go.work.sum
 
-# env file
+# Environment / secrets
 .env
+*.env.local
+*.env.*.local
 
 # Node / Frontend
 node_modules/
@@ -34,11 +33,42 @@ frontend/.output/
 frontend/node_modules/
 *.log
 npm-debug.log*
+pnpm-debug.log*
 
-# Editor/IDE
-# .idea/
-# .vscode/
+# Build artifacts
+dist/
+*.pid
+*.lock
+
+# Cache files
+.cache/
+.cache-go/
+
+# SSL certificates (auto-generated, not committed)
+nginx/ssl/
+
+# Backup data (auto-generated, large)
+backups/
+
+# Editor/IDE (personal)
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS metadata
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Project-specific generated files
 CLAUDE.md
 .claude/
 PROJECT-START.md
 docs/
+.reasonix/
+
+# Local dev scripts
+start.sh

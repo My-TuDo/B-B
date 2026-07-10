@@ -24,8 +24,9 @@
 
     <!-- Comment input -->
     <div v-if="isLoggedIn" class="flex gap-3 mb-6">
-      <div class="w-9 h-9 rounded-full bg-white flex items-center justify-center text-[var(--color-primary)] text-xs font-bold flex-shrink-0">
-        {{ currentUser?.nickname?.charAt(0) || 'U' }}
+      <div class="w-9 h-9 rounded-full bg-white flex items-center justify-center text-[var(--color-primary)] text-xs font-bold flex-shrink-0 overflow-hidden">
+        <img v-if="currentUser?.avatar" :src="currentUser.avatar" class="w-full h-full object-cover" />
+        <span v-else>{{ currentUser?.nickname?.charAt(0) || 'U' }}</span>
       </div>
       <div class="flex-1">
         <textarea

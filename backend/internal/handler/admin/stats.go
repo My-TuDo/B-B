@@ -3,10 +3,14 @@ package admin
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"time"
 
 	"gorm.io/gorm"
 )
+
+// ServerStartTime tracks when the server started (set in main.go)
+var ServerStartTime = time.Now()
 
 // Stats represents dashboard summary statistics.
 type Stats struct {
@@ -37,6 +41,8 @@ type UsersListResp struct {
 	PageSize int            `json:"page_size"`
 }
 
+var allowedSumColumns = map[string]bool{"views": true}
+
 func countTable(db *gorm.DB, ctx context.Context, tableName string) (int64, error) {
 	var count int64
 	if err := db.WithContext(ctx).Table(tableName).Count(&count).Error; err != nil {
@@ -46,6 +52,9 @@ func countTable(db *gorm.DB, ctx context.Context, tableName string) (int64, erro
 }
 
 func sumColumn(db *gorm.DB, ctx context.Context, tableName, colName string) (int64, error) {
+	if !allowedSumColumns[colName] {
+		return 0, fmt.Errorf("sumColumn: column %q is not whitelisted", colName)
+	}
 	var sum int64
 	if err := db.WithContext(ctx).Table(tableName).Select(fmt.Sprintf("COALESCE(SUM(%s), 0)", colName)).Scan(&sum).Error; err != nil {
 		return 0, fmt.Errorf("sum %s.%s: %w", tableName, colName, err)
@@ -55,9 +64,11 @@ func sumColumn(db *gorm.DB, ctx context.Context, tableName, colName string) (int
 
 func countToday(db *gorm.DB, ctx context.Context, tableName string) (int64, error) {
 	var count int64
-	today := time.Now().Format("2006-01-02")
+	now := time.Now()
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	tomorrowStart := todayStart.Add(24 * time.Hour)
 	if err := db.WithContext(ctx).Table(tableName).
-		Where("DATE(created_at) = ?", today).
+		Where("created_at >= ? AND created_at < ?", todayStart, tomorrowStart).
 		Count(&count).Error; err != nil {
 		return 0, fmt.Errorf("count today %s: %w", tableName, err)
 	}
@@ -139,4 +150,22 @@ func updateUserRole(db *gorm.DB, ctx context.Context, userID uint, role uint8) e
 		return fmt.Errorf("updateUserRole: user not found")
 	}
 	return nil
+}
+
+// SystemInfo represents server configuration and status.
+type SystemInfo struct {
+	GoVersion    string `json:"go_version"`
+	Uptime       string `json:"uptime"`
+	DBConnected  bool   `json:"db_connected"`
+}
+
+func getSystemInfo(db *gorm.DB, ctx context.Context) *SystemInfo {
+	info := &SystemInfo{
+		GoVersion: runtime.Version(),
+		Uptime:    time.Since(ServerStartTime).Round(time.Second).String(),
+	}
+	if sqlDB, err := db.DB(); err == nil {
+		info.DBConnected = sqlDB.PingContext(ctx) == nil
+	}
+	return info
 }

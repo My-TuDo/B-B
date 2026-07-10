@@ -18,21 +18,21 @@ let ws: WebSocket | null = null
 
 // ---- Constants ----
 const TRACK_COUNT = 5
-const ANIMATION_DURATION_MS = 8000
-const TIME_WINDOW_BEFORE = 1 // show danmaku 1s before its play_time
-const TIME_WINDOW_AFTER = 5  // show danmaku up to 5s after its play_time
+const SCROLL_DURATION = 7   // seconds of video time to cross the screen (Bilibili style)
+const FADE_DURATION = 3     // seconds of video time for fixed (top/bottom) danmaku to stay
 
 // ---- State ----
-const danmakuPool = ref<DanmakuItem[]>([])
-const playedHistoryIds = new Set<number>()
-const trackBusyUntil: number[] = new Array(TRACK_COUNT).fill(0)
-const recentContentKeys = new Map<string, number>() // contentKey -> timestamp, for dedup
-let isPaused = false
-let checkInterval: ReturnType<typeof setInterval> | null = null
+interface PoolEntry {
+  key: string
+  item: DanmakuItem
+}
+
+const danmakuPool = ref<PoolEntry[]>([])
+const recentContentKeys = new Map<string, number>()
+let rafId: number | null = null
 let videoEl: HTMLVideoElement | null = null
-let onVideoPlay: (() => void) | null = null
-let onVideoPause: (() => void) | null = null
 let onVideoSeeked: (() => void) | null = null
+let optCounter = 0
 
 // ---- Helpers ----
 function makeContentKey(item: DanmakuItem): string {
@@ -40,50 +40,23 @@ function makeContentKey(item: DanmakuItem): string {
 }
 
 function getTrackTop(trackIndex: number, containerHeight: number): number {
-  const startPercent = 0.05 // start at 5% from top
-  const spacing = (0.9 * containerHeight) / TRACK_COUNT // use 90% of height
+  const startPercent = 0.05
+  const spacing = (0.9 * containerHeight) / TRACK_COUNT
   return startPercent * containerHeight + trackIndex * spacing
 }
 
-function assignTrack(): { track: number; top: number } {
-  const container = containerRef.value
-  const containerHeight = container?.clientHeight || 400
-  const now = Date.now()
-
-  // Find the track that becomes free earliest
-  let bestTrack = 0
-  let earliestFree = trackBusyUntil[0]
-
-  for (let i = 0; i < TRACK_COUNT; i++) {
-    if (now >= trackBusyUntil[i]) {
-      // Track is free now
-      bestTrack = i
-      break
-    }
-    if (trackBusyUntil[i] < earliestFree) {
-      earliestFree = trackBusyUntil[i]
-      bestTrack = i
-    }
-  }
-
-  // Mark track busy for animation duration
-  trackBusyUntil[bestTrack] = Math.max(now, trackBusyUntil[bestTrack]) + ANIMATION_DURATION_MS
-  const top = getTrackTop(bestTrack, containerHeight)
-
-  return { track: bestTrack, top }
+/** Generate a stable unique key for a pool entry. */
+function makePoolKey(item: DanmakuItem): string {
+  if (item.id > 0) return String(item.id)
+  return `o:${++optCounter}`
 }
 
-// ---- Dedup check ----
+// ---- Dedup ----
 function isDuplicate(item: DanmakuItem): boolean {
   const key = makeContentKey(item)
   const lastTime = recentContentKeys.get(key)
-  if (lastTime && Date.now() - lastTime < 15000) {
-    // Same content+user within 15s — it's a duplicate
-    return true
-  }
+  if (lastTime && Date.now() - lastTime < 15000) return true
   recentContentKeys.set(key, Date.now())
-
-  // Clean old entries periodically
   if (recentContentKeys.size > 50) {
     const cutoff = Date.now() - 30000
     for (const [k, t] of recentContentKeys) {
@@ -93,159 +66,153 @@ function isDuplicate(item: DanmakuItem): boolean {
   return false
 }
 
-// ---- Create danmaku DOM element ----
-function createDanmakuEl(item: DanmakuItem): HTMLElement | null {
-  if (!containerRef.value) return null
+// ---- RAF loop: drive all danmaku positions by video currentTime ----
+function startRafLoop() {
+  stopRafLoop()
+  const tick = () => {
+    updateDanmakus()
+    rafId = requestAnimationFrame(tick)
+  }
+  rafId = requestAnimationFrame(tick)
+}
 
-  const el = document.createElement('div')
-  el.className = 'danmaku-item'
-  el.dataset.danmakuId = String(item.id)
+function stopRafLoop() {
+  if (rafId !== null) {
+    cancelAnimationFrame(rafId)
+    rafId = null
+  }
+}
 
-  const color = item.color || '#ffffff'
-  const position = item.position || 0
+function updateDanmakus() {
+  if (!containerRef.value || !videoEl || !props.enabled) return
 
-  el.style.color = color
-  el.style.position = 'absolute'
-  el.style.whiteSpace = 'nowrap'
-  el.style.pointerEvents = 'none'
-  el.style.textShadow = '1px 1px 2px rgba(0,0,0,0.8)'
-  el.style.fontWeight = 'bold'
-  el.style.zIndex = '10'
-  el.style.willChange = 'transform'
+  const currentTime = videoEl.currentTime
+  const container = containerRef.value
+  const cw = container.clientWidth
+  const ch = container.clientHeight
 
-  // Size
-  if (item.size === 0) el.style.fontSize = '14px'
-  else if (item.size === 2) el.style.fontSize = '20px'
-  else el.style.fontSize = '16px'
+  // Track which tracks are occupied by current visible danmakus
+  const trackOccupied = new Array(TRACK_COUNT).fill(false)
+  const activeKeys = new Set<string>()
 
-  el.textContent = item.content
+  // ── Step 1: update positions of existing elements ──
+  const existing = container.querySelectorAll<HTMLElement>('.danmaku-item')
+  for (const el of existing) {
+    const playTime = parseFloat(el.dataset.playTime || '0')
+    const posType = parseInt(el.dataset.position || '0')
+    const track = parseInt(el.dataset.track || '0') || 0
+    const elapsed = currentTime - playTime
 
-  const { track, top } = assignTrack()
-  el.dataset.track = String(track)
+    if (posType === 0) {
+      // Scrolling danmaku
+      if (elapsed < 0 || elapsed >= SCROLL_DURATION) {
+        el.remove()
+        continue
+      }
+      const progress = elapsed / SCROLL_DURATION
+      const startX = cw + 20
+      const x = startX - (startX + el.offsetWidth) * progress
+      el.style.transform = `translateX(${x}px)`
+    } else {
+      // Fixed (top / bottom) danmaku
+      if (elapsed < 0 || elapsed >= FADE_DURATION) {
+        el.remove()
+        continue
+      }
+      // Fade out during the last 20 % of duration
+      const fadeStart = FADE_DURATION * 0.8
+      if (elapsed >= fadeStart) {
+        el.style.opacity = String(1 - (elapsed - fadeStart) / (FADE_DURATION - fadeStart))
+      }
+    }
 
-  if (position === 1) {
-    // Top danmaku
-    el.style.top = `${top}px`
-    el.style.left = '50%'
-    el.style.transform = 'translateX(-50%)'
-    el.style.animation = 'danmaku-fade 3s ease-out forwards'
-  } else if (position === 2) {
-    // Bottom danmaku
-    el.style.top = `${containerRef.value.clientHeight * 0.7 + (track * 30)}px`
-    el.style.left = '50%'
-    el.style.transform = 'translateX(-50%)'
-    el.style.animation = 'danmaku-fade 3s ease-out forwards'
-  } else {
-    // Scroll danmaku
-    const containerWidth = containerRef.value.clientWidth || window.innerWidth
-    el.style.setProperty('--danmaku-start-x', `${containerWidth}px`)
-    el.style.top = `${top}px`
-    el.style.left = '0'
-    el.style.animation = `danmaku-scroll ${ANIMATION_DURATION_MS / 1000}s linear forwards`
+    trackOccupied[track] = true
+    const key = el.dataset.danmakuId || ''
+    if (key) activeKeys.add(key)
   }
 
-  if (isPaused) {
-    el.style.animationPlayState = 'paused'
+  // ── Step 2: activate new danmakus from pool ──
+  for (const entry of danmakuPool.value) {
+    if (activeKeys.has(entry.key)) continue
+
+    const { item } = entry
+    const elapsed = currentTime - item.play_time
+    if (elapsed < 0) continue
+
+    const maxDur = (item.position || 0) === 0 ? SCROLL_DURATION : FADE_DURATION
+    if (elapsed >= maxDur) continue
+
+    // Find a free track
+    let freeTrack = -1
+    for (let i = 0; i < TRACK_COUNT; i++) {
+      if (!trackOccupied[i]) { freeTrack = i; break }
+    }
+    if (freeTrack === -1) continue
+
+    // Create DOM element
+    const el = document.createElement('div')
+    el.className = 'danmaku-item'
+    el.dataset.danmakuId = entry.key
+    el.dataset.playTime = String(item.play_time)
+    el.dataset.position = String(item.position || 0)
+    el.dataset.track = String(freeTrack)
+
+    const color = item.color || '#ffffff'
+    const posType = item.position || 0
+
+    el.style.color = color
+    el.style.position = 'absolute'
+    el.style.whiteSpace = 'nowrap'
+    el.style.pointerEvents = 'none'
+    el.style.textShadow = '1px 1px 2px rgba(0,0,0,0.8)'
+    el.style.fontWeight = 'bold'
+    el.style.zIndex = '10'
+    el.style.willChange = 'transform'
+    el.style.fontSize = item.size === 0 ? '22px' : item.size === 2 ? '30px' : '26px'
+    el.textContent = item.content
+
+    const top = getTrackTop(freeTrack, ch)
+    el.style.top = `${top}px`
+
+    if (posType === 1) {
+      // Top fixed
+      el.style.left = '50%'
+      el.style.transform = 'translateX(-50%)'
+      el.style.opacity = '1'
+    } else if (posType === 2) {
+      // Bottom fixed
+      el.style.top = `${ch * 0.7 + freeTrack * 30}px`
+      el.style.left = '50%'
+      el.style.transform = 'translateX(-50%)'
+      el.style.opacity = '1'
+    } else {
+      // Scrolling — calculate position from elapsed video time
+      el.style.left = '0'
+      // Append first, then read offsetWidth for correct calculation
+      container.appendChild(el)
+      const progress = elapsed / SCROLL_DURATION
+      const startX = cw + 20
+      const x = startX - (startX + el.offsetWidth) * progress
+      el.style.transform = `translateX(${x}px)`
+    }
+
+    // For non-scrolling types that weren't appended above
+    if (!el.parentNode) {
+      container.appendChild(el)
+    }
+
+    trackOccupied[freeTrack] = true
   }
-
-  containerRef.value.appendChild(el)
-
-  el.addEventListener('animationend', () => {
-    if (el.parentNode) el.parentNode.removeChild(el)
-  }, { once: true })
-
-  return el
 }
 
 // ---- Public: add danmaku (called from parent for optimistic render) ----
-function addDanmaku(item: DanmakuItem, isRealTime = true) {
+function addDanmaku(item: DanmakuItem) {
   if (!props.enabled) return
- 
-  if (isRealTime && isDuplicate(item)) {
-    return
-  }
+  if (isDuplicate(item)) return
 
-  if (isRealTime) {
-    createDanmakuEl(item)
-    danmakuPool.value.push(item)
-    playedHistoryIds.add(item.id)
-  } else {
-    // History danmaku: add to pool for time-based rendering
-    danmakuPool.value.push(item)
-    // Check if should show now
-    const currentTime = videoEl?.currentTime || 0
-    if (isInTimeWindow(item.play_time, currentTime) && !playedHistoryIds.has(item.id)) {
-      playedHistoryIds.add(item.id)
-      createDanmakuEl(item)
-    }
-  }
-}
-
-// ---- Time checking ----
-function isInTimeWindow(playTime: number, currentTime: number): boolean {
-  return currentTime >= playTime - TIME_WINDOW_BEFORE && currentTime <= playTime + TIME_WINDOW_AFTER
-}
-
-function checkDanmaku() {
-  if (!props.enabled || isPaused) return
-
-  const currentTime = videoEl?.currentTime || 0
-
-  for (const item of danmakuPool.value) {
-    // Skip if already played
-    if (playedHistoryIds.has(item.id)) continue
-
-    // Check time window
-    if (isInTimeWindow(item.play_time, currentTime)) {
-      playedHistoryIds.add(item.id)
-      createDanmakuEl(item)
-    }
-  }
-}
-
-function resetPlayedHistory() {
-  // When seeking, clear played history so danmaku can reappear
-  playedHistoryIds.clear()
-}
-
-function checkDanmakuOnSeek() {
-  if (!props.enabled) return
-  const currentTime = videoEl?.currentTime || 0
-
-  // Clear existing DOM elements (they're from old time position)
-  if (containerRef.value) {
-    const existing = containerRef.value.querySelectorAll('.danmaku-item')
-    existing.forEach((el) => el.remove())
-  }
-
-  // Reset played history and re-check
-  resetPlayedHistory()
-
-  for (const item of danmakuPool.value) {
-    if (isInTimeWindow(item.play_time, currentTime)) {
-      playedHistoryIds.add(item.id)
-      createDanmakuEl(item)
-    }
-  }
-}
-
-// ---- Pause / Resume ----
-function pauseAll() {
-  isPaused = true
-  if (!containerRef.value) return
-  const els = containerRef.value.querySelectorAll<HTMLElement>('.danmaku-item')
-  els.forEach((el) => {
-    el.style.animationPlayState = 'paused'
-  })
-}
-
-function resumeAll() {
-  isPaused = false
-  if (!containerRef.value) return
-  const els = containerRef.value.querySelectorAll<HTMLElement>('.danmaku-item')
-  els.forEach((el) => {
-    el.style.animationPlayState = 'running'
-  })
+  const key = makePoolKey(item)
+  danmakuPool.value.push({ key, item })
+  // RAF loop will pick it up on next frame (~16ms)
 }
 
 // ---- WebSocket ----
@@ -260,8 +227,7 @@ function connectWebSocket() {
   ws.onmessage = (event) => {
     try {
       const data: DanmakuItem = JSON.parse(event.data)
-      // Direct call — no debounce, no delay
-      addDanmaku(data, true)
+      addDanmaku(data)
     } catch {
       // ignore parse errors
     }
@@ -281,12 +247,10 @@ async function loadHistory() {
   try {
     const data = await get<DanmakuItem[]>(`/api/v1/videos/${props.videoId}/danmaku`)
     if (data && data.length > 0) {
-      // Mark all as history (non-real-time)
       data.forEach((item) => {
-        danmakuPool.value.push(item)
+        const key = makePoolKey(item)
+        danmakuPool.value.push({ key, item })
       })
-      // Check immediately for current video time
-      checkDanmaku()
     }
   } catch {
     // silent fail
@@ -297,37 +261,22 @@ async function loadHistory() {
 function bindVideoEvents(el: HTMLVideoElement) {
   videoEl = el
 
-  onVideoPlay = () => resumeAll()
-  onVideoPause = () => pauseAll()
-  onVideoSeeked = () => checkDanmakuOnSeek()
+  // On seek: RAF loop handles positions on next frame automatically
+  // No special handling needed — currentTime changes, next RAF frame recalculates.
 
-  el.addEventListener('play', onVideoPlay)
-  el.addEventListener('pause', onVideoPause)
+  // Listen only for seeked to add a safety re-check (some browsers pause on seek)
+  onVideoSeeked = () => {
+    // ensure any danmaku that should now be visible is picked up
+    updateDanmakus()
+  }
+
   el.addEventListener('seeked', onVideoSeeked)
 }
 
 function unbindVideoEvents() {
   if (!videoEl) return
-  if (onVideoPlay) videoEl.removeEventListener('play', onVideoPlay)
-  if (onVideoPause) videoEl.removeEventListener('pause', onVideoPause)
   if (onVideoSeeked) videoEl.removeEventListener('seeked', onVideoSeeked)
   videoEl = null
-}
-
-// ---- Time check interval ----
-function startTimeCheck() {
-  checkInterval = setInterval(() => {
-    if (props.enabled && !isPaused && videoEl && !videoEl.paused) {
-      checkDanmaku()
-    }
-  }, 250)
-}
-
-function stopTimeCheck() {
-  if (checkInterval) {
-    clearInterval(checkInterval)
-    checkInterval = null
-  }
 }
 
 // ---- Watch videoEl prop ----
@@ -337,10 +286,6 @@ watch(
     unbindVideoEvents()
     if (el) {
       bindVideoEvents(el)
-      // Sync pause state
-      if (el.paused) {
-        isPaused = true
-      }
     }
   },
 )
@@ -349,7 +294,7 @@ watch(
 onMounted(() => {
   loadHistory()
   connectWebSocket()
-  startTimeCheck()
+  startRafLoop()
 
   // If videoEl prop is already set, bind it
   if (props.videoEl) {
@@ -358,7 +303,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  stopTimeCheck()
+  stopRafLoop()
   unbindVideoEvents()
   if (ws) {
     ws.onclose = null
@@ -367,7 +312,7 @@ onUnmounted(() => {
   }
 })
 
-defineExpose({ addDanmaku, pauseAll, resumeAll })
+defineExpose({ addDanmaku })
 </script>
 
 <style scoped>
@@ -380,28 +325,5 @@ defineExpose({ addDanmaku, pauseAll, resumeAll })
   overflow: hidden;
   pointer-events: none;
   z-index: 5;
-}
-</style>
-
-<style>
-@keyframes danmaku-scroll {
-  from {
-    transform: translateX(var(--danmaku-start-x, 100vw));
-  }
-  to {
-    transform: translateX(-100%);
-  }
-}
-
-@keyframes danmaku-fade {
-  0% {
-    opacity: 1;
-  }
-  80% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-  }
 }
 </style>

@@ -3,7 +3,6 @@ package comment
 import (
 	"context"
 	"fmt"
-	"time"
 
 	commentmodel "github.com/My-TuDo/B-B/backend/internal/model/comment"
 	usermodel "github.com/My-TuDo/B-B/backend/internal/model/user"
@@ -234,11 +233,9 @@ func toCommentResp(ctx context.Context, c *commentmodel.Comment) *commentmodel.C
 		CreatedAt: c.CreatedAt,
 	}
 	if c.User.ID != 0 {
-		avatar := c.User.Avatar
-		if avatar != "" {
-			if url, err := storage.GetPresignedURL(ctx, avatar, time.Hour); err == nil {
-				avatar = url
-			}
+		avatar := ""
+		if c.User.Avatar != "" {
+			avatar = storage.GetObjectURL(c.User.Avatar)
 		}
 		resp.User = &usermodel.UserBrief{
 			ID:       c.User.ID,

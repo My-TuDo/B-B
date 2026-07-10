@@ -122,7 +122,7 @@ func main() {
 	}
 	rmqClient, rmqErr := rabbitmq.Init(rmqCfg)
 	if rmqErr != nil {
-		logger.Warn("rabbitmq init failed, transcode will run without queue", zap.String("error", rmqErr.Error()))
+		logger.Warn("rabbitmq init failed, transcode will run without queue")
 	} else {
 		logger.Info("rabbitmq connected")
 		defer rmqClient.Close()

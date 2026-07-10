@@ -50,11 +50,9 @@ func (s *Service) Search(ctx context.Context, q string, page, pageSize int) (*hi
 			UpdatedAt:   v.UpdatedAt,
 		}
 		if v.User.ID != 0 {
-			avatar := v.User.Avatar
-			if avatar != "" {
-				if url, err := storage.GetPresignedURL(ctx, avatar, time.Hour); err == nil {
-					avatar = url
-				}
+			avatar := ""
+			if v.User.Avatar != "" {
+				avatar = storage.GetObjectURL(v.User.Avatar)
 			}
 			items[i].User = &usermodel.UserBrief{
 				ID:       v.User.ID,

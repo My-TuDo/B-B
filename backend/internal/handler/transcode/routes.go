@@ -13,5 +13,6 @@ func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB) {
 	videos := r.Group("/videos")
 	{
 		videos.GET("/:id/transcode-status", handler.GetStatus)
+		videos.GET("/:id/transcode-stream", StreamProgress)
 	}
 }

@@ -1,13 +1,18 @@
 package worker
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	mmodel "github.com/My-TuDo/B-B/backend/internal/model/meta"
 	qmodel "github.com/My-TuDo/B-B/backend/internal/model/quality"
@@ -20,7 +25,6 @@ import (
 
 const workDir = "/tmp/bb-transcode"
 
-// transcodeTargets defines the resolution targets for transcoding.
 var transcodeTargets = []struct {
 	Label  string
 	Width  int
@@ -32,25 +36,24 @@ var transcodeTargets = []struct {
 	{"1080p", 1920, 1080},
 }
 
-// ProcessVideo handles the full transcode workflow for a single video.
-// Returns an error if the entire process fails; individual step failures are logged and handled gracefully.
 func ProcessVideo(videoID uint, db *gorm.DB) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+	broker := GetBroker()
 	logger.Info("worker: starting transcode", zap.Uint("video_id", videoID))
 
 	// --- Check ffmpeg / ffprobe availability ---
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		logger.Warn("worker: ffmpeg not found, skipping transcode", zap.Uint("video_id", videoID))
-		updateStatus(db, ctx, videoID, tmodel.StatusDone, 100, "")
+		logger.Error("worker: ffmpeg not found, skipping transcode", zap.Uint("video_id", videoID))
+		updateStatus(db, ctx, videoID, tmodel.StatusFailed, 0, "ffmpeg not available on server")
 		return
 	}
 	if _, err := exec.LookPath("ffprobe"); err != nil {
-		logger.Warn("worker: ffprobe not found, skipping transcode", zap.Uint("video_id", videoID))
-		updateStatus(db, ctx, videoID, tmodel.StatusDone, 100, "")
+		logger.Error("worker: ffprobe not found, skipping transcode", zap.Uint("video_id", videoID))
+		updateStatus(db, ctx, videoID, tmodel.StatusFailed, 0, "ffprobe not available on server")
 		return
 	}
 
-	// --- Update status: processing ---
 	updateStatus(db, ctx, videoID, tmodel.StatusProcessing, 0, "")
 
 	// --- Get original video presigned URL ---
@@ -60,13 +63,12 @@ func ProcessVideo(videoID uint, db *gorm.DB) {
 		failTask(db, ctx, videoID, "video not found")
 		return
 	}
-	inputURL, err := storage.GetPresignedURL(ctx, videoURL, 3600)
+	inputURL, err := storage.GetPresignedURL(ctx, videoURL, time.Hour)
 	if err != nil {
 		failTask(db, ctx, videoID, fmt.Sprintf("presigned URL: %v", err))
 		return
 	}
 
-	// --- Create work directory ---
 	vidDir := filepath.Join(workDir, strconv.FormatUint(uint64(videoID), 10))
 	if err := os.MkdirAll(vidDir, 0755); err != nil {
 		failTask(db, ctx, videoID, fmt.Sprintf("mkdir: %v", err))
@@ -75,35 +77,40 @@ func ProcessVideo(videoID uint, db *gorm.DB) {
 	defer os.RemoveAll(vidDir)
 
 	// Download original
-	inputFile := filepath.Join(vidDir, "input"+filepath.Ext(videoURL))
-	if filepath.Ext(videoURL) == "" {
-		inputFile = filepath.Join(vidDir, "input.mp4")
+	cleanPath := videoURL
+	if idx := strings.Index(cleanPath, "?"); idx >= 0 {
+		cleanPath = cleanPath[:idx]
 	}
+	ext := filepath.Ext(cleanPath)
+	if ext == "" {
+		ext = ".mp4"
+	}
+	inputFile := filepath.Join(vidDir, "input"+ext)
+
+	// Broadcast download progress
+	broker.Publish(ProgressUpdate{VideoID: videoID, Status: tmodel.StatusProcessing, Progress: 2, Quality: "download"})
 	if err := downloadFile(ctx, inputURL, inputFile); err != nil {
 		failTask(db, ctx, videoID, fmt.Sprintf("download: %v", err))
 		return
 	}
 
-	// --- ffprobe metadata extraction ---
+	// --- ffprobe ---
 	meta, err := runFFProbe(inputFile)
 	if err != nil {
 		logger.Warn("worker: ffprobe failed", zap.Uint("video_id", videoID), zap.Error(err))
 	} else {
 		saveMeta(db, ctx, videoID, meta)
-		// Update video duration
 		db.WithContext(ctx).Model(&struct{ ID uint }{}).Table("videos").
 			Where("id = ?", videoID).
 			Update("duration", uint(meta.Duration))
 	}
 
-	updateStatus(db, ctx, videoID, tmodel.StatusProcessing, 10, "")
+	publishAndPersist(db, ctx, videoID, tmodel.StatusProcessing, 10, "")
 
-	// --- Determine resolutions based on source ---
 	maxW := meta.Width
 	maxH := meta.Height
 	if maxW == 0 || maxH == 0 {
-		maxW = 1920
-		maxH = 1080
+		maxW, maxH = 1920, 1080
 	}
 
 	var targets []struct {
@@ -116,7 +123,6 @@ func ProcessVideo(videoID uint, db *gorm.DB) {
 			targets = append(targets, t)
 		}
 	}
-	// If no targets matched (e.g. tiny source), use the source resolution
 	if len(targets) == 0 {
 		targets = append(targets, struct {
 			Label  string
@@ -126,6 +132,7 @@ func ProcessVideo(videoID uint, db *gorm.DB) {
 	}
 
 	totalSteps := len(targets)
+	// progress ranges: download→2%, ffprobe→10%, each encode→80%/totalSteps
 	for i, target := range targets {
 		qualityDir := filepath.Join(vidDir, target.Label)
 		if err := os.MkdirAll(qualityDir, 0755); err != nil {
@@ -136,14 +143,33 @@ func ProcessVideo(videoID uint, db *gorm.DB) {
 		outputM3U8 := filepath.Join(qualityDir, "index.m3u8")
 		segPattern := filepath.Join(qualityDir, "seg_%03d.ts")
 
-		err := runFFmpegHLS(inputFile, outputM3U8, segPattern, target.Width, target.Height)
+		// Real-time progress callback for ffmpeg
+		onFfmpegProgress := func(ffmpegPct float64) {
+			// Encode base: 10. Each quality gets 80%/totalSteps width.
+			// Real ffmpeg progress fills within that slot.
+			base := float64(10 + i*80/totalSteps)
+			slotWidth := float64(80) / float64(totalSteps)
+			overall := uint8(base + ffmpegPct/100.0*slotWidth)
+			if overall > 99 {
+				overall = 99
+			}
+			broker.Publish(ProgressUpdate{
+				VideoID:  videoID,
+				Status:   tmodel.StatusProcessing,
+				Progress: overall,
+				Quality:  target.Label,
+			})
+		}
+
+		err := runFFmpegHLS(ctx, inputFile, outputM3U8, segPattern, target.Width, target.Height, meta.Duration, onFfmpegProgress)
 		if err != nil {
 			logger.Error("worker: ffmpeg HLS failed", zap.Uint("video_id", videoID), zap.String("quality", target.Label), zap.Error(err))
 			continue
 		}
 
-		// Upload all ts segments + m3u8 to MinIO
+		// Upload segments
 		entries, _ := os.ReadDir(qualityDir)
+		var totalSize uint64
 		for _, entry := range entries {
 			if entry.IsDir() {
 				continue
@@ -158,36 +184,26 @@ func ProcessVideo(videoID uint, db *gorm.DB) {
 			if err := uploadFileToMinio(ctx, localPath, minioObj, fileSize); err != nil {
 				logger.Error("worker: upload segment failed", zap.String("obj", minioObj), zap.Error(err))
 			}
-		}
-
-		// Calculate total size
-		var totalSize uint64
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-			info, _ := entry.Info()
-			if info != nil {
-				totalSize += uint64(info.Size())
+			if fileSize > 0 {
+				totalSize += uint64(fileSize)
 			}
 		}
 
-		// Save quality record
 		m3u8ObjName := fmt.Sprintf("videos/%d/%s/index.m3u8", videoID, target.Label)
 		saveQuality(db, ctx, videoID, target.Label, m3u8ObjName, totalSize)
 
-		progress := uint8(10 + (i+1)*80/totalSteps)
-		updateStatus(db, ctx, videoID, tmodel.StatusProcessing, progress, "")
+		// End-of-quality progress
+		qualProgress := uint8(10 + (i+1)*80/totalSteps)
+		publishAndPersist(db, ctx, videoID, tmodel.StatusProcessing, qualProgress, "")
 	}
 
-	// --- Auto cover extraction ---
+	// --- Auto cover ---
 	var coverURL string
 	db.Raw("SELECT cover_url FROM videos WHERE id = ?", videoID).Scan(&coverURL)
 	if coverURL == "" {
 		coverPath := filepath.Join(vidDir, "cover.jpg")
 		coverObjName := fmt.Sprintf("%d/cover_auto_%d.jpg", videoID, videoID)
-		// Try with video ID directly since we don't have user ID here
-		if err := runFFmpegCover(inputFile, coverPath); err == nil {
+		if err := runFFmpegCover(ctx, inputFile, coverPath); err == nil {
 			info, _ := os.Stat(coverPath)
 			var sz int64
 			if info != nil {
@@ -203,13 +219,34 @@ func ProcessVideo(videoID uint, db *gorm.DB) {
 		}
 	}
 
-	updateStatus(db, ctx, videoID, tmodel.StatusDone, 100, "")
+	publishAndPersist(db, ctx, videoID, tmodel.StatusDone, 100, "")
+	broker.Publish(ProgressUpdate{VideoID: videoID, Status: tmodel.StatusDone, Progress: 100})
 	logger.Info("worker: transcode complete", zap.Uint("video_id", videoID))
 }
 
-// --- internal helpers ---
+// publishAndPersist writes to DB and publishes to SSE broker in one call.
+func publishAndPersist(db *gorm.DB, ctx context.Context, videoID uint, status int8, progress uint8, errMsg string) {
+	updateStatus(db, ctx, videoID, status, progress, errMsg)
+	GetBroker().Publish(ProgressUpdate{
+		VideoID:  videoID,
+		Status:   status,
+		Progress: progress,
+		ErrorMsg: errMsg,
+	})
+}
 
 func updateStatus(db *gorm.DB, ctx context.Context, videoID uint, status int8, progress uint8, errMsg string) {
+	existing := &tmodel.TranscodeTask{}
+	res := db.WithContext(ctx).Where("video_id = ?", videoID).First(existing)
+	if res.Error != nil {
+		db.WithContext(ctx).Create(&tmodel.TranscodeTask{
+			VideoID:  videoID,
+			Status:   status,
+			Progress: progress,
+			ErrorMsg: errMsg,
+		})
+		return
+	}
 	db.WithContext(ctx).Model(&tmodel.TranscodeTask{}).
 		Where("video_id = ?", videoID).
 		Updates(map[string]interface{}{
@@ -222,6 +259,7 @@ func updateStatus(db *gorm.DB, ctx context.Context, videoID uint, status int8, p
 func failTask(db *gorm.DB, ctx context.Context, videoID uint, errMsg string) {
 	logger.Error("worker: transcode failed", zap.Uint("video_id", videoID), zap.String("error", errMsg))
 	updateStatus(db, ctx, videoID, tmodel.StatusFailed, 0, errMsg)
+	GetBroker().Publish(ProgressUpdate{VideoID: videoID, Status: tmodel.StatusFailed, Progress: 0, ErrorMsg: errMsg})
 }
 
 func saveMeta(db *gorm.DB, ctx context.Context, videoID uint, meta *mmodel.VideoMeta) {
@@ -263,6 +301,24 @@ func saveQuality(db *gorm.DB, ctx context.Context, videoID uint, quality string,
 	})
 }
 
+// ffprobeOutput types
+type ffprobeOutput struct {
+	Streams []ffprobeStream `json:"streams"`
+	Format  ffprobeFormat   `json:"format"`
+}
+
+type ffprobeStream struct {
+	CodecType string `json:"codec_type"`
+	CodecName string `json:"codec_name"`
+	Width     int    `json:"width"`
+	Height    int    `json:"height"`
+}
+
+type ffprobeFormat struct {
+	Duration string `json:"duration"`
+	BitRate  string `json:"bit_rate"`
+}
+
 func runFFProbe(inputFile string) (*mmodel.VideoMeta, error) {
 	cmd := exec.Command("ffprobe",
 		"-v", "quiet",
@@ -276,98 +332,41 @@ func runFFProbe(inputFile string) (*mmodel.VideoMeta, error) {
 		return nil, fmt.Errorf("ffprobe: %w", err)
 	}
 
+	var probe ffprobeOutput
+	if err := json.Unmarshal(output, &probe); err != nil {
+		return nil, fmt.Errorf("ffprobe parse: %w", err)
+	}
+
 	meta := &mmodel.VideoMeta{}
-
-	// Parse JSON output simplistically (avoid heavy json unmarshaling into complex ffprobe structures)
-	raw := string(output)
-
-	// duration
-	if idx := strings.Index(raw, `"duration"`); idx >= 0 {
-		rest := raw[idx+len(`"duration"`):]
-		if colon := strings.Index(rest, ":"); colon >= 0 {
-			after := strings.TrimSpace(rest[colon+1:])
-			end := strings.IndexAny(after, ",\n\r")
-			if end < 0 {
-				end = len(after)
-			}
-			val := strings.Trim(after[:end], `" `)
-			if d, err := strconv.ParseFloat(val, 64); err == nil {
-				meta.Duration = d
-			}
+	if d, err := strconv.ParseFloat(probe.Format.Duration, 64); err == nil {
+		meta.Duration = d
+	}
+	if b, err := strconv.ParseUint(probe.Format.BitRate, 10, 64); err == nil {
+		meta.Bitrate = uint(b / 1000)
+	}
+	for _, s := range probe.Streams {
+		if s.CodecType == "video" {
+			meta.Width = uint(s.Width)
+			meta.Height = uint(s.Height)
+			meta.Codec = s.CodecName
+			break
 		}
 	}
-
-	// width
-	if idx := strings.Index(raw, `"width"`); idx >= 0 {
-		rest := raw[idx+len(`"width"`):]
-		if colon := strings.Index(rest, ":"); colon >= 0 {
-			after := strings.TrimSpace(rest[colon+1:])
-			end := strings.IndexAny(after, ",\n\r")
-			if end < 0 {
-				end = len(after)
-			}
-			val := strings.Trim(after[:end], `" `)
-			if w, err := strconv.ParseUint(val, 10, 64); err == nil {
-				meta.Width = uint(w)
-			}
-		}
-	}
-
-	// height
-	if idx := strings.Index(raw, `"height"`); idx >= 0 {
-		rest := raw[idx+len(`"height"`):]
-		if colon := strings.Index(rest, ":"); colon >= 0 {
-			after := strings.TrimSpace(rest[colon+1:])
-			end := strings.IndexAny(after, ",\n\r")
-			if end < 0 {
-				end = len(after)
-			}
-			val := strings.Trim(after[:end], `" `)
-			if h, err := strconv.ParseUint(val, 10, 64); err == nil {
-				meta.Height = uint(h)
-			}
-		}
-	}
-
-	// codec_name
-	if idx := strings.Index(raw, `"codec_name"`); idx >= 0 {
-		rest := raw[idx+len(`"codec_name"`):]
-		if colon := strings.Index(rest, ":"); colon >= 0 {
-			after := strings.TrimSpace(rest[colon+1:])
-			end := strings.IndexAny(after, ",\n\r")
-			if end < 0 {
-				end = len(after)
-			}
-			val := strings.Trim(after[:end], `" `)
-			meta.Codec = val
-		}
-	}
-
-	// bit_rate
-	if idx := strings.Index(raw, `"bit_rate"`); idx >= 0 {
-		rest := raw[idx+len(`"bit_rate"`):]
-		if colon := strings.Index(rest, ":"); colon >= 0 {
-			after := strings.TrimSpace(rest[colon+1:])
-			end := strings.IndexAny(after, ",\n\r")
-			if end < 0 {
-				end = len(after)
-			}
-			val := strings.Trim(after[:end], `" `)
-			if b, err := strconv.ParseUint(val, 10, 64); err == nil {
-				meta.Bitrate = uint(b / 1000) // Convert to kbps
-			}
-		}
-	}
-
 	return meta, nil
 }
 
-func runFFmpegHLS(inputFile, outputM3U8, segPattern string, width, height int) error {
+// runFFmpegHLS runs ffmpeg with -progress pipe:1 to emit real-time progress on stdout.
+func runFFmpegHLS(ctx context.Context, inputFile, outputM3U8, segPattern string, width, height int, duration float64, onProgress func(pct float64)) error {
 	scaleFilter := fmt.Sprintf("scale=%d:%d", width, height)
-	cmd := exec.Command("ffmpeg",
+
+	cmd := exec.CommandContext(ctx, "ffmpeg",
+		"-progress", "pipe:1",
+		"-nostats",
 		"-i", inputFile,
 		"-vf", scaleFilter,
 		"-c:v", "libx264",
+		"-c:a", "aac",
+		"-b:a", "128k",
 		"-preset", "fast",
 		"-crf", "23",
 		"-hls_time", "10",
@@ -375,15 +374,78 @@ func runFFmpegHLS(inputFile, outputM3U8, segPattern string, width, height int) e
 		"-hls_segment_filename", segPattern,
 		outputM3U8,
 	)
-	out, err := cmd.CombinedOutput()
+
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("ffmpeg HLS: %w (output: %s)", err, string(out))
+		return fmt.Errorf("ffmpeg stdout pipe: %w", err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("ffmpeg stderr pipe: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("ffmpeg start: %w", err)
+	}
+
+	// Parse progress from stdout: each frame emits key=value blocks
+	scanDone := make(chan struct{})
+	go func() {
+		defer close(scanDone)
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if strings.HasPrefix(line, "out_time=") {
+				ts := strings.TrimPrefix(line, "out_time=")
+				outTime := parseTimeToSeconds(ts)
+				if duration > 0 && outTime > 0 {
+					pct := (outTime / duration) * 100.0
+					if pct > 100 {
+						pct = 100
+					}
+					onProgress(pct)
+				}
+			}
+		}
+	}()
+
+	// Drain stderr so ffmpeg doesn't block
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			_, err := stderr.Read(buf)
+			if err != nil {
+				break
+			}
+		}
+	}()
+
+	err = cmd.Wait()
+	<-scanDone
+
+	if err != nil {
+		return fmt.Errorf("ffmpeg HLS: %w", err)
 	}
 	return nil
 }
 
-func runFFmpegCover(inputFile, outputFile string) error {
-	cmd := exec.Command("ffmpeg",
+// parseTimeToSeconds converts "HH:MM:SS.microseconds" to float seconds.
+func parseTimeToSeconds(ts string) float64 {
+	// format: "00:01:23.456789" or "00:01:23.456"
+	hmsParts := strings.SplitN(ts, ".", 2)
+	hms := hmsParts[0]
+	parts := strings.Split(hms, ":")
+	if len(parts) != 3 {
+		return 0
+	}
+	h, _ := strconv.Atoi(parts[0])
+	m, _ := strconv.Atoi(parts[1])
+	s, _ := strconv.Atoi(parts[2])
+	return float64(h*3600+m*60) + float64(s)
+}
+
+func runFFmpegCover(ctx context.Context, inputFile, outputFile string) error {
+	cmd := exec.CommandContext(ctx, "ffmpeg",
 		"-i", inputFile,
 		"-ss", "1",
 		"-vframes", "1",
@@ -392,24 +454,37 @@ func runFFmpegCover(inputFile, outputFile string) error {
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("ffmpeg cover: %w (output: %s)", err, string(out))
+		outputStr := string(out)
+		if len(outputStr) > 500 {
+			outputStr = outputStr[:500] + "..."
+		}
+		logger.Debug("ffmpeg cover output", zap.String("output", outputStr))
+		return fmt.Errorf("ffmpeg cover: %w", err)
 	}
 	return nil
 }
 
 func downloadFile(ctx context.Context, url, destPath string) error {
-	// Use ffmpeg's built-in protocol to download, or use a simple approach:
-	// For simplicity, pass the URL directly to ffmpeg; no need to download separately
-	// since ffmpeg can read URLs directly. But for the local file approach:
-	cmd := exec.Command("ffmpeg",
-		"-i", url,
-		"-c", "copy",
-		"-y",
-		destPath,
-	)
-	out, err := cmd.CombinedOutput()
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return fmt.Errorf("download via ffmpeg: %w (output: %s)", err, string(out))
+		return fmt.Errorf("downloadFile request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("downloadFile: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("downloadFile: HTTP %d", resp.StatusCode)
+	}
+	f, err := os.Create(destPath)
+	if err != nil {
+		return fmt.Errorf("downloadFile create file: %w", err)
+	}
+	defer f.Close()
+	_, err = io.Copy(f, resp.Body)
+	if err != nil {
+		return fmt.Errorf("downloadFile write: %w", err)
 	}
 	return nil
 }

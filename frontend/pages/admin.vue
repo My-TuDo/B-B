@@ -6,35 +6,50 @@
       <p class="mt-1 text-sm text-[var(--color-text-secondary)]">系统运营数据概览与用户管理</p>
     </div>
 
-    <!-- Stats cards row -->
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-      <div
-        v-for="card in statCards"
-        :key="card.label"
-        class="p-5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl"
+    <!-- Tab navigation -->
+    <div class="flex gap-1 mb-6 p-1 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] w-fit">
+      <button
+        v-for="tab in tabs"
+        :key="tab.id"
+        class="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+        :class="activeTab === tab.id ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text)]'"
+        @click="activeTab = tab.id"
       >
-        <p class="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">{{ card.label }}</p>
-        <p class="mt-2 text-2xl font-bold text-[var(--color-text)]">{{ card.value }}</p>
-        <p v-if="card.sub" class="mt-1 text-xs text-[var(--color-text-secondary)]">{{ card.sub }}</p>
-      </div>
+        {{ tab.label }}
+      </button>
     </div>
 
-    <!-- Today cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
-      <div class="p-5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl">
-        <p class="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">今日新用户</p>
-        <p class="mt-2 text-xl font-bold text-[var(--color-text)]">{{ stats?.today_new_users ?? '-' }}</p>
+    <!-- Stats overview tab -->
+    <template v-if="activeTab === 'overview'">
+      <!-- Stats cards row -->
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+        <div
+          v-for="card in statCards"
+          :key="card.label"
+          class="p-5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl"
+        >
+          <p class="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">{{ card.label }}</p>
+          <p class="mt-2 text-2xl font-bold text-[var(--color-text)]">{{ card.value }}</p>
+          <p v-if="card.sub" class="mt-1 text-xs text-[var(--color-text-secondary)]">{{ card.sub }}</p>
+        </div>
       </div>
-      <div class="p-5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl">
-        <p class="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">今日新视频</p>
-        <p class="mt-2 text-xl font-bold text-[var(--color-text)]">{{ stats?.today_new_videos ?? '-' }}</p>
-      </div>
-    </div>
 
-    <!-- Users section -->
-    <div class="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
-      <div class="px-6 py-4 border-b border-[var(--color-border)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h2 class="text-base font-semibold text-[var(--color-text)]">用户管理</h2>
+      <!-- Today cards -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
+        <div class="p-5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl">
+          <p class="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">今日新用户</p>
+          <p class="mt-2 text-xl font-bold text-[var(--color-text)]">{{ stats?.today_new_users ?? '-' }}</p>
+        </div>
+        <div class="p-5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl">
+          <p class="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">今日新视频</p>
+          <p class="mt-2 text-xl font-bold text-[var(--color-text)]">{{ stats?.today_new_videos ?? '-' }}</p>
+        </div>
+      </div>
+
+      <!-- Users section -->
+      <div class="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+        <div class="px-6 py-4 border-b border-[var(--color-border)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <h2 class="text-base font-semibold text-[var(--color-text)]">用户管理</h2>
         <div class="flex items-center gap-2">
           <input
             v-model="searchQuery"
@@ -130,11 +145,51 @@
         </div>
       </div>
     </div>
+    </template>
+
+    <!-- System tab -->
+    <template v-if="activeTab === 'system'">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="p-5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl">
+          <p class="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-wide mb-3">运行时</p>
+          <div class="space-y-2">
+            <div class="flex justify-between text-sm">
+              <span class="text-[var(--color-text-secondary)]">Go 版本</span>
+              <span class="text-[var(--color-text)] font-mono">{{ sysInfo?.go_version || '-' }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-[var(--color-text-secondary)]">运行时间</span>
+              <span class="text-[var(--color-text)] font-mono">{{ sysInfo?.uptime || '-' }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-[var(--color-text-secondary)]">数据库连接</span>
+              <span
+                class="font-medium"
+                :class="sysInfo?.db_connected ? 'text-green-500' : 'text-red-500'"
+              >{{ sysInfo?.db_connected ? '正常' : '断开' }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="p-5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl">
+          <p class="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-wide mb-3">构建信息</p>
+          <div class="space-y-2">
+            <div class="flex justify-between text-sm">
+              <span class="text-[var(--color-text-secondary)]">项目版本</span>
+              <span class="text-[var(--color-text)]">B-B v1.0</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-[var(--color-text-secondary)]">前端框架</span>
+              <span class="text-[var(--color-text)]">Nuxt 4 + Vue 3</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import type { AdminStats, AdminUserItem, AdminUsersListResp } from '~/types'
+import type { AdminStats, AdminUserItem, AdminUsersListResp, SystemInfo } from '~/types'
 import { useApi } from '~/composables/useApi'
 import { useToast } from '~/composables/useToast'
 
@@ -145,6 +200,12 @@ definePageMeta({
 const { get, put } = useApi()
 const { showToast } = useToast()
 
+const activeTab = ref('overview')
+const tabs = [
+  { id: 'overview', label: '概览' },
+  { id: 'system', label: '系统' },
+]
+const sysInfo = ref<SystemInfo | null>(null)
 const stats = ref<AdminStats | null>(null)
 const users = ref<AdminUserItem[]>([])
 const usersTotal = ref(0)
@@ -207,6 +268,14 @@ async function loadStats() {
   }
 }
 
+async function loadSystemInfo() {
+  try {
+    sysInfo.value = await get<SystemInfo>('/api/v1/admin/system')
+  } catch {
+    sysInfo.value = null
+  }
+}
+
 async function loadUsers(page?: number) {
   loadingUsers.value = true
   if (page) currentPage.value = page
@@ -247,5 +316,6 @@ async function handleRoleChange(userId: number, newRole: number) {
 onMounted(() => {
   loadStats()
   loadUsers()
+  loadSystemInfo()
 })
 </script>

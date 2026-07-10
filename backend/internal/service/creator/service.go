@@ -3,7 +3,6 @@ package creator
 import (
 	"context"
 	"fmt"
-	"time"
 
 	historymodel "github.com/My-TuDo/B-B/backend/internal/model/history"
 	usermodel "github.com/My-TuDo/B-B/backend/internal/model/user"
@@ -51,11 +50,9 @@ func (s *Service) ListVideos(ctx context.Context, userID uint, page, pageSize in
 			UpdatedAt:   v.UpdatedAt,
 		}
 		if v.User.ID != 0 {
-			avatar := v.User.Avatar
-			if avatar != "" {
-				if url, err := storage.GetPresignedURL(ctx, avatar, time.Hour); err == nil {
-					avatar = url
-				}
+			avatar := ""
+			if v.User.Avatar != "" {
+				avatar = storage.GetObjectURL(v.User.Avatar)
 			}
 			resp.User = &usermodel.UserBrief{
 				ID:       v.User.ID,
@@ -63,6 +60,10 @@ func (s *Service) ListVideos(ctx context.Context, userID uint, page, pageSize in
 				Nickname: v.User.Nickname,
 				Avatar:   avatar,
 			}
+		}
+		// Presign cover URL — use direct public URL since bucket is public
+		if resp.CoverURL != "" {
+			resp.CoverURL = storage.GetObjectURL(resp.CoverURL)
 		}
 		items[i] = resp
 	}

@@ -235,6 +235,12 @@ export interface AdminUsersListResp {
   page_size: number
 }
 
+export interface SystemInfo {
+  go_version: string
+  uptime: string
+  db_connected: boolean
+}
+
 export interface TranscodeStatus {
   status: number
   progress: number

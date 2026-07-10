@@ -3,7 +3,6 @@ package admin
 import (
 	"context"
 	"fmt"
-	"time"
 
 	usermodel "github.com/My-TuDo/B-B/backend/internal/model/user"
 	videomodel "github.com/My-TuDo/B-B/backend/internal/model/video"
@@ -50,11 +49,9 @@ func (s *Service) ListVideos(ctx context.Context, status int8, page, pageSize in
 			UpdatedAt:   v.UpdatedAt,
 		}
 		if v.User.ID != 0 {
-			avatar := v.User.Avatar
-			if avatar != "" {
-				if url, err := storage.GetPresignedURL(ctx, avatar, time.Hour); err == nil {
-					avatar = url
-				}
+			avatar := ""
+			if v.User.Avatar != "" {
+				avatar = storage.GetObjectURL(v.User.Avatar)
 			}
 			resp.User = &usermodel.UserBrief{
 				ID:       v.User.ID,

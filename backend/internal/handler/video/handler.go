@@ -428,11 +428,11 @@ type combinedReader struct {
 func (cr *combinedReader) Read(p []byte) (int, error) {
 	if !cr.prefixRead {
 		n := copy(p, cr.prefix)
-		cr.prefixRead = true
 		if n < len(cr.prefix) {
 			cr.prefix = cr.prefix[n:]
 			return n, nil
 		}
+		cr.prefixRead = true
 		return n, nil
 	}
 	return cr.file.Read(p)

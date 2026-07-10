@@ -12,6 +12,7 @@ import (
 func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, rdb *redis.Client, publishFn func(videoID uint) error) {
 	repo := videorepo.NewRepository(db)
 	svc := videoservice.NewServiceWithRedis(repo, rdb)
+	svc.SetDB(db)
 	if publishFn != nil {
 		svc.SetTranscodePublisher(publishFn)
 	}
