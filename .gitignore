@@ -45,7 +45,8 @@ dist/
 .cache-go/
 
 # SSL certificates (auto-generated, not committed)
-nginx/ssl/
+nginx/ssl/*.crt
+nginx/ssl/*.key
 
 # Backup data (auto-generated, large)
 backups/
