@@ -1,4 +1,5 @@
 services:
+  # ── 数据库 ──
   mysql:
     image: mysql:8.0
     container_name: bb-mysql
@@ -19,6 +20,7 @@ services:
       timeout: 5s
       retries: 10
 
+  # ── 缓存 ──
   redis:
     image: redis:7-alpine
     container_name: bb-redis
@@ -27,13 +29,13 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
 
+  # ── 消息队列 ──
   rabbitmq:
     image: rabbitmq:3-management
     container_name: bb-rabbitmq
@@ -41,15 +43,13 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
-    environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 5s
       timeout: 10s
       retries: 10
 
+  # ── 对象存储 ──
   minio:
     image: minio/minio:latest
     container_name: bb-minio
@@ -59,6 +59,7 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     ports:
+      - "9000:9000"
       - "9001:9001"
     volumes:
       - minio_data:/data
@@ -68,6 +69,7 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── MinIO 初始化（创建 bucket + 公开策略） ──
   create-buckets:
     image: minio/mc:latest
     container_name: bb-minio-mc
@@ -82,6 +84,7 @@ services:
       exit 0;
       "
 
+  # ── 后端 API ──
   backend:
     build:
       context: ./backend
@@ -101,7 +104,7 @@ services:
       DB_NAME: ${MYSQL_DATABASE}
       REDIS_HOST: redis
       REDIS_PORT: "6379"
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_PASSWORD: ""
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
@@ -123,6 +126,7 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  # ── 前端 Nuxt SSR ──
   frontend:
     build:
       context: ./frontend
@@ -136,6 +140,7 @@ services:
     depends_on:
       - backend
 
+  # ── Nginx 入口（HTTPS 反向代理） ──
   nginx:
     build:
       context: ./nginx
