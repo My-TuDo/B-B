@@ -16,13 +16,13 @@ RUN pnpm build
 
 FROM node:22-alpine
 
-WORKDIR /app
+WORKDIR /app/.output/server
 
-COPY --from=builder /app/.output ./.output
+COPY --from=builder /app/.output /app/.output
 
 ENV HOST=0.0.0.0
 ENV PORT=3000
 
 EXPOSE 3000
 
-CMD ["node", ".output/server/index.mjs"]
+CMD ["node", "index.mjs"]
