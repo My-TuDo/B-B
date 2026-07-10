@@ -14,6 +14,7 @@ import (
 var Client *minio.Client
 var bucketName string
 var endpoint string
+var publicEndpoint string
 var useSSL bool
 
 func Init(cfg *config.Config) *minio.Client {
@@ -27,6 +28,10 @@ func Init(cfg *config.Config) *minio.Client {
 
 	bucketName = cfg.MinioBucket
 	endpoint = cfg.MinioEndpoint
+	publicEndpoint = cfg.MinioPublicEndpoint
+	if publicEndpoint == "" {
+		publicEndpoint = cfg.MinioEndpoint
+	}
 	useSSL = cfg.MinioUseSSL
 
 	exists, err := client.BucketExists(context.Background(), bucketName)
@@ -84,5 +89,5 @@ func GetObjectURL(objectName string) string {
 	if useSSL {
 		scheme = "https"
 	}
-	return fmt.Sprintf("%s://%s/%s/%s", scheme, endpoint, bucketName, objectName)
+	return fmt.Sprintf("%s://%s/%s/%s", scheme, publicEndpoint, bucketName, objectName)
 }

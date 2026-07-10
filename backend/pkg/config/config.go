@@ -18,6 +18,7 @@ type Config struct {
 	RedisPort  string
 	RedisPass  string
 	MinioEndpoint  string
+	MinioPublicEndpoint string
 	MinioAccessKey string
 	MinioSecretKey string
 	MinioBucket    string
@@ -43,6 +44,7 @@ func Load() *Config {
 	v.SetDefault("REDIS_PORT", "6379")
 	v.SetDefault("REDIS_PASSWORD", "")
 	v.SetDefault("MINIO_ENDPOINT", "localhost:9000")
+	v.SetDefault("MINIO_PUBLIC_ENDPOINT", "localhost:9000")
 	v.SetDefault("MINIO_ACCESS_KEY", "minioadmin")
 	v.SetDefault("MINIO_SECRET_KEY", "minioadmin")
 	v.SetDefault("MINIO_BUCKET", "bb-videos")
@@ -78,6 +80,7 @@ func Load() *Config {
 		RedisPort:      v.GetString("REDIS_PORT"),
 		RedisPass:      v.GetString("REDIS_PASSWORD"),
 		MinioEndpoint:  v.GetString("MINIO_ENDPOINT"),
+		MinioPublicEndpoint: v.GetString("MINIO_PUBLIC_ENDPOINT"),
 		MinioAccessKey: v.GetString("MINIO_ACCESS_KEY"),
 		MinioSecretKey: v.GetString("MINIO_SECRET_KEY"),
 		MinioBucket:    v.GetString("MINIO_BUCKET"),
@@ -120,6 +123,9 @@ func Load() *Config {
 	}
 	if v := os.Getenv("MINIO_ENDPOINT"); v != "" {
 		cfg.MinioEndpoint = v
+	}
+	if v := os.Getenv("MINIO_PUBLIC_ENDPOINT"); v != "" {
+		cfg.MinioPublicEndpoint = v
 	}
 	if v := os.Getenv("MINIO_ACCESS_KEY"); v != "" {
 		cfg.MinioAccessKey = v
