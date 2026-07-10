@@ -16,6 +16,12 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o server ./cmd/serv
 
 FROM alpine:3.19
 
+# Use Alpine mirror (uncomment or change if apk.dl-cdn.alpinelinux.org is unreachable)
+ARG APK_MIRROR=mirrors.ustc.edu.cn
+RUN if [ -n "${APK_MIRROR}" ]; then \
+      sed -i "s/dl-cdn.alpinelinux.org/${APK_MIRROR}/g" /etc/apk/repositories; \
+    fi
+
 RUN apk add --no-cache ca-certificates tzdata ffmpeg
 
 WORKDIR /app
