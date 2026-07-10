@@ -129,10 +129,7 @@ func (s *Service) GetVideo(ctx context.Context, id uint, viewerID uint) (*videom
 
 	// Generate cover presigned URL if cover exists
 	if video.CoverURL != "" {
-		url, err := storage.GetPresignedURL(ctx, video.CoverURL, time.Hour)
-		if err == nil {
-			resp.CoverURL = url
-		}
+		resp.CoverURL = storage.GetObjectURL(video.CoverURL)
 	}
 
 	return resp, nil
@@ -329,12 +326,7 @@ func getFileExt(filename string) string {
 func (s *Service) presignCovers(ctx context.Context, videos []videomodel.VideoResp) {
 	for i := range videos {
 		if videos[i].CoverURL != "" {
-			url, err := storage.GetPresignedURL(ctx, videos[i].CoverURL, time.Hour)
-			if err != nil {
-				videos[i].CoverURL = ""
-			} else {
-				videos[i].CoverURL = url
-			}
+			videos[i].CoverURL = storage.GetObjectURL(videos[i].CoverURL)
 		}
 	}
 }

@@ -3,7 +3,6 @@ package search
 import (
 	"context"
 	"fmt"
-	"time"
 
 	historymodel "github.com/My-TuDo/B-B/backend/internal/model/history"
 	usermodel "github.com/My-TuDo/B-B/backend/internal/model/user"
@@ -66,10 +65,7 @@ func (s *Service) Search(ctx context.Context, q string, page, pageSize int) (*hi
 	// Generate presigned URLs for covers (failures are silently ignored)
 	for i := range items {
 		if items[i].CoverURL != "" {
-			url, err := storage.GetPresignedURL(ctx, items[i].CoverURL, time.Hour)
-			if err == nil {
-				items[i].CoverURL = url
-			}
+			items[i].CoverURL = storage.GetObjectURL(items[i].CoverURL)
 		}
 	}
 

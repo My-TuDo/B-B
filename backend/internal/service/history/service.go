@@ -90,12 +90,7 @@ func (s *Service) List(ctx context.Context, userID uint, page, pageSize int) (*h
 	// Presign cover URLs and user avatars
 	for i := range items {
 		if items[i].Video.CoverURL != "" {
-			url, err := storage.GetPresignedURL(ctx, items[i].Video.CoverURL, time.Hour)
-			if err != nil {
-				items[i].Video.CoverURL = ""
-			} else {
-				items[i].Video.CoverURL = url
-			}
+			items[i].Video.CoverURL = storage.GetObjectURL(items[i].Video.CoverURL)
 		}
 		if items[i].Video.User != nil && items[i].Video.User.Avatar != "" {
 			items[i].Video.User.Avatar = storage.GetObjectURL(items[i].Video.User.Avatar)

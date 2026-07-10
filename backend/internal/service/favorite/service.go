@@ -168,9 +168,7 @@ func (s *Service) GetFavoriteDetail(ctx context.Context, userID uint, favoriteID
 		}
 		// Presign cover
 		if v.CoverURL != "" {
-			if url, err := storage.GetPresignedURL(ctx, v.CoverURL, time.Hour); err == nil {
-				items[i].CoverURL = url
-			}
+			items[i].CoverURL = storage.GetObjectURL(v.CoverURL)
 		}
 	}
 
