@@ -85,7 +85,6 @@
           <div>
             <div class="flex items-center justify-between mb-3">
               <h3 class="text-base font-semibold text-[var(--color-text)]">投稿 · {{ videos.length }}</h3>
-              <NuxtLink :to="`/user/${userId}?tab=videos`" class="text-xs text-[var(--color-primary)] hover:underline">查看更多 →</NuxtLink>
             </div>
             <div v-if="videos.length > 0" class="flex gap-4 overflow-x-auto pb-2">
               <div v-for="v in videos.slice(0, 5)" :key="v.id" class="w-52 flex-shrink-0"><VideoCard :video="v" /></div>
@@ -95,7 +94,6 @@
           <div v-if="publicFavorites.length > 0">
             <div class="flex items-center justify-between mb-3">
               <h3 class="text-base font-semibold text-[var(--color-text)]">收藏</h3>
-              <NuxtLink :to="`/user/${userId}?tab=favorites`" class="text-xs text-[var(--color-primary)] hover:underline">查看更多 →</NuxtLink>
             </div>
             <div class="flex gap-4 overflow-x-auto pb-2">
               <NuxtLink v-for="fav in publicFavorites.slice(0, 5)" :key="fav.id" :to="`/favorites/${fav.id}`"
@@ -139,7 +137,6 @@
           <div v-for="fav in publicFavorites" :key="fav.id">
             <div class="flex items-center justify-between mb-3">
               <h3 class="text-base font-semibold text-[var(--color-text)]">{{ fav.name }} · {{ fav.item_count }}</h3>
-              <NuxtLink :to="`/favorites/${fav.id}`" class="text-xs text-[var(--color-primary)] hover:underline">查看更多 →</NuxtLink>
             </div>
             <div v-if="favVideos[fav.id]?.length" class="flex gap-4 overflow-x-auto pb-2">
               <div v-for="v in favVideos[fav.id].slice(0, 5)" :key="v.id" class="w-52 flex-shrink-0">
