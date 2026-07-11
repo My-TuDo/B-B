@@ -92,18 +92,22 @@
             </div>
             <EmptyState v-else message="还没有发布视频" />
           </div>
-          <div v-if="publicFavorites.length > 0" class="space-y-6">
-            <div v-for="fav in publicFavorites.slice(0, 3)" :key="fav.id">
-              <div class="flex items-center justify-between mb-3">
-                <h3 class="text-base font-semibold text-[var(--color-text)]">{{ fav.name }} · {{ fav.item_count }}</h3>
-                <NuxtLink :to="`/favorites/${fav.id}`" class="text-xs text-[var(--color-primary)] hover:underline">查看更多 →</NuxtLink>
-              </div>
-              <div v-if="favVideos[fav.id]?.length" class="flex gap-4 overflow-x-auto pb-2">
-                <div v-for="v in favVideos[fav.id].slice(0, 5)" :key="v.id" class="w-52 flex-shrink-0"><VideoCard :video="v" /></div>
-              </div>
-              <div v-else class="flex gap-4 overflow-x-auto">
-                <div v-for="i in Math.min(fav.item_count, 5)" :key="i" class="w-52 h-32 rounded-lg bg-[var(--color-surface-hover)] flex-shrink-0 animate-pulse" />
-              </div>
+          <div v-if="publicFavorites.length > 0">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-base font-semibold text-[var(--color-text)]">收藏</h3>
+              <NuxtLink to="?tab=favorites" class="text-xs text-[var(--color-primary)] hover:underline">查看更多 →</NuxtLink>
+            </div>
+            <div class="flex gap-4 overflow-x-auto pb-2">
+              <NuxtLink v-for="fav in publicFavorites.slice(0, 5)" :key="fav.id" :to="`/favorites/${fav.id}`"
+                class="relative w-40 h-24 flex-shrink-0 rounded-xl overflow-hidden group">
+                <img v-if="favVideos[fav.id]?.[0]?.cover_url" :src="favVideos[fav.id][0].cover_url" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                <div v-else class="w-full h-full bg-[var(--color-surface-hover)]" />
+                <div class="absolute inset-0 bg-black/40 group-hover:bg-black/50 transition-colors" />
+                <div class="absolute inset-0 flex flex-col items-center justify-center text-white">
+                  <p class="text-sm font-medium">{{ fav.name }}</p>
+                  <p class="text-xs text-white/70 mt-0.5">{{ fav.item_count }} 个视频</p>
+                </div>
+              </NuxtLink>
             </div>
           </div>
         </div>
