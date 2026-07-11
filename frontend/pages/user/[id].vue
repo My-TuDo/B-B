@@ -89,13 +89,18 @@
             </div>
             <EmptyState v-else message="还没有发布视频" />
           </div>
-          <div v-if="favSummary.length > 0">
-            <div class="flex items-center justify-between mb-3">
-              <h3 class="text-base font-semibold text-[var(--color-text)]">收藏夹</h3>
-              <NuxtLink to="?tab=favorites" class="text-xs text-[var(--color-primary)] hover:underline">查看更多 →</NuxtLink>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div v-for="fav in favSummary" :key="fav.id" class="p-3 bg-[var(--color-surface)] border border-[var(--color-border)]/30 rounded-xl hover:bg-[var(--color-surface-hover)] transition-colors cursor-pointer" @click="router.push(`/favorites/${fav.id}`)"><p class="text-sm font-medium text-[var(--color-text)]">{{ fav.name }}</p><p class="text-xs text-[var(--color-text-secondary)] mt-1">{{ fav.item_count }} 个视频</p></div>
+          <div v-if="publicFavorites.length > 0" class="space-y-6">
+            <div v-for="fav in publicFavorites.slice(0, 3)" :key="fav.id">
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="text-base font-semibold text-[var(--color-text)]">{{ fav.name }} · {{ fav.item_count }}</h3>
+                <NuxtLink :to="`/favorites/${fav.id}`" class="text-xs text-[var(--color-primary)] hover:underline">查看更多 →</NuxtLink>
+              </div>
+              <div v-if="favVideos[fav.id]?.length" class="flex gap-4 overflow-x-auto pb-2">
+                <div v-for="v in favVideos[fav.id].slice(0, 5)" :key="v.id" class="w-52 flex-shrink-0"><VideoCard :video="v" /></div>
+              </div>
+              <div v-else class="flex gap-4 overflow-x-auto">
+                <div v-for="i in Math.min(fav.item_count, 5)" :key="i" class="w-52 h-32 rounded-lg bg-[var(--color-surface-hover)] flex-shrink-0 animate-pulse" />
+              </div>
             </div>
           </div>
         </div>
