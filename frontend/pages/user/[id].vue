@@ -39,11 +39,6 @@
             </div>
           </div>
         </div>
-        <div class="flex justify-center gap-8 px-6 pb-4 border-t border-[var(--color-border)]/30 pt-3">
-          <div class="text-center"><p class="text-lg font-bold text-[var(--color-text)]">{{ stats.videos }}</p><p class="text-xs text-[var(--color-text-secondary)]">视频</p></div>
-          <div class="text-center"><p class="text-lg font-bold text-[var(--color-text)]">{{ stats.followers }}</p><p class="text-xs text-[var(--color-text-secondary)]">粉丝</p></div>
-          <div class="text-center"><p class="text-lg font-bold text-[var(--color-text)]">{{ stats.following }}</p><p class="text-xs text-[var(--color-text-secondary)]">关注</p></div>
-        </div>
       </div>
 
       <!-- Edit modal -->
@@ -59,8 +54,8 @@
       </AppModal>
 
       <!-- Tab bar with stats -->
-      <div class="flex items-center gap-6 border-b border-[var(--color-border)] mb-6">
-        <div class="flex gap-6 flex-1">
+      <div class="flex items-center gap-4 border-b border-[var(--color-border)] mb-6">
+        <div class="flex gap-4 flex-shrink-0">
           <button v-for="tab in tabs" :key="tab.key"
             class="pb-3 text-sm font-medium transition-colors border-b-2 flex items-center gap-1.5"
             :class="activeTab === tab.key ? 'text-[var(--color-primary)] border-[var(--color-primary)]' : 'text-[var(--color-text-secondary)] border-transparent hover:text-[var(--color-text)]'"
@@ -69,10 +64,18 @@
             <span>{{ tab.label }}</span>
           </button>
         </div>
-        <div class="hidden sm:flex items-center gap-4 text-xs text-[var(--color-text-secondary)] pb-3">
+        <div class="hidden md:flex items-center flex-1 max-w-xs">
+          <div class="w-full h-8 bg-[var(--color-surface-hover)] rounded-full border border-[var(--color-border)]/50 flex items-center px-3">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-[var(--color-text-secondary)] flex-shrink-0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input v-model="searchUserVideos" type="text" placeholder="搜索视频" class="flex-1 bg-transparent text-xs text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none ml-2" @keyup.enter="activeTab='videos'" />
+          </div>
+        </div>
+        <div class="hidden sm:flex items-center gap-3 text-xs text-[var(--color-text-secondary)] pb-3 flex-shrink-0 ml-auto">
           <span>关注 {{ stats.following }}</span>
-          <span class="text-[var(--color-border)]">|</span>
+          <span class="text-[var(--color-border)]/50">|</span>
           <span>粉丝 {{ stats.followers }}</span>
+          <span class="text-[var(--color-border)]/50">|</span>
+          <span>点赞 {{ stats.videos }}</span>
         </div>
       </div>
 
