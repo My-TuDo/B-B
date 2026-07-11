@@ -58,58 +58,55 @@
         </div>
       </AppModal>
 
-      <!-- Tab bar -->
-      <div class="flex gap-6 border-b border-[var(--color-border)] mb-6">
-        <button v-for="tab in tabs" :key="tab.key"
-          class="pb-3 text-sm font-medium transition-colors border-b-2 flex items-center gap-1.5"
-          :class="activeTab === tab.key ? 'text-[var(--color-primary)] border-[var(--color-primary)]' : 'text-[var(--color-text-secondary)] border-transparent hover:text-[var(--color-text)]'"
-          @click="activeTab = tab.key">
-          <span v-html="tab.icon" />
-          <span>{{ tab.label }}</span>
-        </button>
+      <!-- Tab bar with stats -->
+      <div class="flex items-center gap-6 border-b border-[var(--color-border)] mb-6">
+        <div class="flex gap-6 flex-1">
+          <button v-for="tab in tabs" :key="tab.key"
+            class="pb-3 text-sm font-medium transition-colors border-b-2 flex items-center gap-1.5"
+            :class="activeTab === tab.key ? 'text-[var(--color-primary)] border-[var(--color-primary)]' : 'text-[var(--color-text-secondary)] border-transparent hover:text-[var(--color-text)]'"
+            @click="activeTab = tab.key">
+            <span v-html="tab.icon" />
+            <span>{{ tab.label }}</span>
+          </button>
+        </div>
+        <div class="hidden sm:flex items-center gap-4 text-xs text-[var(--color-text-secondary)] pb-3">
+          <span>关注 {{ stats.following }}</span>
+          <span class="text-[var(--color-border)]">|</span>
+          <span>粉丝 {{ stats.followers }}</span>
+        </div>
       </div>
 
-      <!-- 主页 Tab: 摘要 + 双栏 -->
+      <!-- 主页 Tab: horz scroll + right sidebar -->
       <div v-if="activeTab === 'home'" class="flex flex-col lg:flex-row gap-6">
-        <div class="flex-1 min-w-0 space-y-6">
-          <!-- Videos summary -->
+        <div class="flex-1 min-w-0 space-y-8">
           <div>
             <div class="flex items-center justify-between mb-3">
-              <h3 class="text-sm font-semibold text-[var(--color-text)]">投稿</h3>
-              <NuxtLink :to="`/user/${userId}?tab=videos`" class="text-xs text-[var(--color-primary)] hover:underline" @click="activeTab='videos'">查看更多 →</NuxtLink>
+              <h3 class="text-base font-semibold text-[var(--color-text)]">投稿 · {{ videos.length }}</h3>
+              <NuxtLink to="?tab=videos" class="text-xs text-[var(--color-primary)] hover:underline">查看更多 →</NuxtLink>
             </div>
-            <div v-if="videos.length > 0" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <VideoCard v-for="v in videos.slice(0, 4)" :key="v.id" :video="v" />
+            <div v-if="videos.length > 0" class="flex gap-4 overflow-x-auto pb-2">
+              <div v-for="v in videos.slice(0, 5)" :key="v.id" class="w-52 flex-shrink-0"><VideoCard :video="v" /></div>
             </div>
             <EmptyState v-else message="还没有发布视频" />
           </div>
-          <!-- Favorites summary -->
-          <div>
+          <div v-if="favSummary.length > 0">
             <div class="flex items-center justify-between mb-3">
-              <h3 class="text-sm font-semibold text-[var(--color-text)]">收藏夹</h3>
-              <NuxtLink :to="`/user/${userId}?tab=favorites`" class="text-xs text-[var(--color-primary)] hover:underline" @click="activeTab='favorites'">查看更多 →</NuxtLink>
+              <h3 class="text-base font-semibold text-[var(--color-text)]">收藏夹</h3>
+              <NuxtLink to="?tab=favorites" class="text-xs text-[var(--color-primary)] hover:underline">查看更多 →</NuxtLink>
             </div>
-            <div v-if="favSummary.length > 0" class="space-y-2">
-              <div v-for="fav in favSummary" :key="fav.id" class="flex items-center justify-between p-3 bg-[var(--color-surface)] border border-[var(--color-border)]/30 rounded-lg hover:bg-[var(--color-surface-hover)] transition-colors cursor-pointer" @click="router.push(`/favorites/${fav.id}`)">
-                <span class="text-sm text-[var(--color-text)]">{{ fav.name }}</span>
-                <span class="text-xs text-[var(--color-text-secondary)]">{{ fav.item_count }} 个视频</span>
-              </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div v-for="fav in favSummary" :key="fav.id" class="p-3 bg-[var(--color-surface)] border border-[var(--color-border)]/30 rounded-xl hover:bg-[var(--color-surface-hover)] transition-colors cursor-pointer" @click="router.push(`/favorites/${fav.id}`)"><p class="text-sm font-medium text-[var(--color-text)]">{{ fav.name }}</p><p class="text-xs text-[var(--color-text-secondary)] mt-1">{{ fav.item_count }} 个视频</p></div>
             </div>
-            <EmptyState v-else message="暂无收藏夹" />
           </div>
         </div>
-        <!-- Sidebar -->
-        <div class="w-full lg:w-72 flex-shrink-0 space-y-4">
+        <div class="w-full lg:w-64 flex-shrink-0 space-y-3">
+          <div v-if="isOwner" class="p-4 bg-[var(--color-surface)] border border-[var(--color-border)]/30 rounded-xl">
+            <p class="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-wide mb-2">创作中心</p>
+            <NuxtLink to="/creator" class="block text-center py-2 text-xs font-medium bg-[var(--color-primary)]/10 text-[var(--color-primary)] rounded-lg hover:bg-[var(--color-primary)]/20 transition-colors">视频投稿</NuxtLink>
+          </div>
           <div class="p-4 bg-[var(--color-surface)] border border-[var(--color-border)]/30 rounded-xl">
             <p class="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-wide mb-2">个人简介</p>
             <p class="text-sm text-[var(--color-text)] leading-relaxed">{{ user.bio || '这个人很懒，什么都没写' }}</p>
-          </div>
-          <div class="p-4 bg-[var(--color-surface)] border border-[var(--color-border)]/30 rounded-xl">
-            <p class="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-wide mb-2">社交</p>
-            <p class="text-xs text-[var(--color-text-secondary)] mb-2">粉丝 {{ stats.followers }} · 关注 {{ stats.following }}</p>
-            <NuxtLink v-if="isOwner" to="/creator" class="block text-center py-2 text-xs font-medium bg-[var(--color-primary)]/10 text-[var(--color-primary)] rounded-lg hover:bg-[var(--color-primary)]/20 transition-colors">
-              📊 创作中心
-            </NuxtLink>
           </div>
         </div>
       </div>
