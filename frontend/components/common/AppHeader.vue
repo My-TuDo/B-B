@@ -1,5 +1,5 @@
 <template>
-  <header class="fixed top-0 left-0 right-0 z-50 bg-[var(--color-surface)] border-b border-[var(--color-border)]" style="height: var(--header-height)">
+  <header class="fixed top-0 left-0 right-0 z-50 bg-[var(--color-surface)]/80 backdrop-blur-xl border-b border-[var(--color-border)]/50" style="height: var(--header-height)">
     <div class="h-full max-w-[1920px] mx-auto px-4 flex items-center justify-between">
       <!-- Left: Logo -->
       <NuxtLink to="/" class="inline-block min-w-[4rem] text-left text-2xl font-bold text-[var(--color-primary)] hover:text-[var(--color-primary-hover)] transition-colors transition-opacity duration-200" :style="{ opacity: visible ? 1 : 0 }">

@@ -3,7 +3,7 @@
     <AppHeader />
     <AppSidebar :collapsed="sidebarCollapsed" @toggle="sidebarCollapsed = !sidebarCollapsed" />
     <main
-      class="min-h-[calc(100vh-var(--header-height))] px-6 pb-8 transition-all duration-200"
+      class="min-h-[calc(100vh-var(--header-height))] px-6 pb-8 transition-[margin] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]"
       :style="mainStyle"
     >
       <slot />
