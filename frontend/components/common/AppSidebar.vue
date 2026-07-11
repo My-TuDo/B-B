@@ -51,14 +51,6 @@
       </template>
 
       <!-- Creator center -->
-      <NuxtLink
-        to="/creator"
-        class="sidebar-item"
-        :class="{ 'sidebar-item--active': route.path === '/creator' }"
-      >
-        <IconCreator class="sidebar-icon" />
-        <span v-show="isExpanded" class="sidebar-label">创作中心</span>
-      </NuxtLink>
     </nav>
 
     <!-- Pinned bottom area -->
