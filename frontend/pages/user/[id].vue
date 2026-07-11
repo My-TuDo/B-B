@@ -123,9 +123,20 @@
       <!-- 收藏 Tab -->
       <div v-if="activeTab === 'favorites'">
         <LoadingSpinner v-if="loadingFavorites" />
-        <div v-else-if="publicFavorites.length > 0" class="space-y-3">
-          <div v-for="fav in publicFavorites" :key="fav.id" class="p-4 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-surface-hover)] transition-colors cursor-pointer" @click="router.push(`/favorites/${fav.id}`)">
-            <div class="flex items-center justify-between"><div><p class="text-sm font-medium text-[var(--color-text)]">{{ fav.name }}</p><p class="text-xs text-[var(--color-text-secondary)] mt-1">{{ fav.item_count }} 个视频</p></div><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-[var(--color-text-secondary)]"><polyline points="9 18 15 12 9 6"/></svg></div>
+        <div v-else-if="publicFavorites.length > 0" class="space-y-8">
+          <div v-for="fav in publicFavorites" :key="fav.id">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-base font-semibold text-[var(--color-text)]">{{ fav.name }} · {{ fav.item_count }}</h3>
+              <NuxtLink :to="`/favorites/${fav.id}`" class="text-xs text-[var(--color-primary)] hover:underline">查看更多 →</NuxtLink>
+            </div>
+            <div v-if="favVideos[fav.id]?.length" class="flex gap-4 overflow-x-auto pb-2">
+              <div v-for="v in favVideos[fav.id].slice(0, 5)" :key="v.id" class="w-52 flex-shrink-0">
+                <VideoCard :video="v" />
+              </div>
+            </div>
+            <div v-else class="flex gap-4 overflow-x-auto pb-2">
+              <div v-for="i in Math.min(fav.item_count, 5)" :key="i" class="w-52 h-32 rounded-lg bg-[var(--color-surface-hover)] flex-shrink-0 animate-pulse" />
+            </div>
           </div>
         </div>
         <EmptyState v-else message="暂无公开收藏夹" />
@@ -158,6 +169,7 @@ const editing = ref(false)
 const activeTab = ref<string>('home')
 const isFollowing = ref(false)
 const publicFavorites = ref<FavoriteInfo[]>([])
+const favVideos = reactive<Record<number, VideoInfo[]>>({})
 const avatarUploading = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const stats = ref({ videos: 0, followers: 0, following: 0 })
@@ -197,7 +209,16 @@ async function fetchFavorites() {
   loadingFavorites.value = true
   try { publicFavorites.value = await get<FavoriteInfo[]>(`/api/v1/users/${userId.value}/favorites`) }
   catch { publicFavorites.value = [] }
-  finally { loadingFavorites.value = false }
+  finally {
+    loadingFavorites.value = false
+    const favs = publicFavorites.value
+    if (favs.length > 0) {
+      for (const fav of favs.slice(0, 5)) {
+        try { const data = await get<{ items: VideoInfo[] }>(`/api/v1/favorites/${fav.id}`, { page_size: 5 }); if (data?.items) favVideos[fav.id] = data.items }
+        catch { favVideos[fav.id] = [] }
+      }
+    }
+  }
 }
 async function toggleFollow() {
   if (!userStore.isLoggedIn) { showToast('请先登录', 'error'); return }
