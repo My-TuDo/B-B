@@ -1,7 +1,7 @@
 <template>
   <div>
     <!-- Tabs: 推荐 | 最新 | 关注 -->
-    <div class="flex gap-2 mb-6">
+    <div class="flex gap-1 p-1 bg-[var(--color-surface)]/60 backdrop-blur-sm rounded-[var(--radius-full)] border border-[var(--color-border)]/30 w-fit mb-6">
       <button
         v-for="tab in displayTabs"
         :key="tab.key"
