@@ -112,7 +112,7 @@
         <div class="w-full lg:w-64 flex-shrink-0 space-y-3">
           <div v-if="isOwner" class="p-4 bg-[var(--color-surface)] border border-[var(--color-border)]/30 rounded-xl">
             <p class="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-wide mb-2">创作中心</p>
-            <NuxtLink to="/creator" class="block text-center py-2 text-xs font-medium bg-[var(--color-primary)]/10 text-[var(--color-primary)] rounded-lg hover:bg-[var(--color-primary)]/20 transition-colors">视频投稿</NuxtLink>
+            <NuxtLink to="/drafts" class="block text-center py-2 text-xs font-medium bg-[var(--color-primary)]/10 text-[var(--color-primary)] rounded-lg hover:bg-[var(--color-primary)]/20 transition-colors">视频投稿</NuxtLink>
           </div>
           <div class="p-4 bg-[var(--color-surface)] border border-[var(--color-border)]/30 rounded-xl">
             <p class="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-wide mb-2">个人简介</p>
