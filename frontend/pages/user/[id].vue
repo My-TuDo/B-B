@@ -65,7 +65,7 @@
           </button>
         </div>
         <div class="hidden md:flex items-center flex-1 max-w-xs">
-          <div class="w-full h-8 bg-[var(--color-surface-hover)] rounded-full border border-[var(--color-border)]/50 flex items-center px-3">
+          <div class="w-full h-9 bg-[var(--color-surface-hover)] rounded-full border border-[var(--color-border)]/50 flex items-center px-3">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-[var(--color-text-secondary)] flex-shrink-0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <input v-model="searchUserVideos" type="text" placeholder="搜索视频" class="flex-1 bg-transparent text-xs text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none ml-2" @keyup.enter="activeTab='videos'" />
           </div>
