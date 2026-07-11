@@ -85,7 +85,7 @@
           <div>
             <div class="flex items-center justify-between mb-3">
               <h3 class="text-base font-semibold text-[var(--color-text)]">投稿 · {{ videos.length }}</h3>
-              <NuxtLink to="?tab=videos" class="text-xs text-[var(--color-primary)] hover:underline">查看更多 →</NuxtLink>
+              <NuxtLink :to="`/user/${userId}?tab=videos`" class="text-xs text-[var(--color-primary)] hover:underline">查看更多 →</NuxtLink>
             </div>
             <div v-if="videos.length > 0" class="flex gap-4 overflow-x-auto pb-2">
               <div v-for="v in videos.slice(0, 5)" :key="v.id" class="w-52 flex-shrink-0"><VideoCard :video="v" /></div>

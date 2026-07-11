@@ -13,6 +13,11 @@
     <div v-else-if="video" class="flex flex-col lg:flex-row gap-6">
       <!-- Main content -->
       <div class="flex-1 min-w-0">
+        <!-- Back button -->
+        <button class="mb-3 px-4 py-1.5 text-sm bg-[var(--color-surface)] border border-[var(--color-border)]/50 rounded-xl text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors flex items-center gap-1" @click="router.back()">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+          返回
+        </button>
         <!-- Video player with danmaku layer -->
         <div class="relative w-full bg-black rounded-[var(--radius-lg)] overflow-hidden shadow-lg shadow-black/30 ring-1 ring-white/5">
           <video
