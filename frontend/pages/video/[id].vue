@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-[1800px] mx-auto">
+  <div>
     <div v-if="loading">
       <LoadingSpinner />
     </div>
@@ -142,7 +142,7 @@
         </div>
 
         <!-- Video info -->
-        <div class="mt-5">
+        <div class="mt-6">
           <h1 class="text-xl font-bold text-[var(--color-text)] leading-snug font-display">{{ video.title }}</h1>
 
           <!-- UP主 + interaction buttons row -->

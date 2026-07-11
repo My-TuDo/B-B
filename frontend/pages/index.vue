@@ -32,7 +32,7 @@
 
     <!-- Video grid -->
     <div v-else-if="videos.length > 0">
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         <VideoCard
           v-for="video in videos"
           :key="video.id"
@@ -41,7 +41,7 @@
       </div>
 
       <!-- Load more -->
-      <div v-if="hasMore" class="flex justify-center mt-10">
+      <div v-if="hasMore" class="flex justify-center mt-8">
         <button
           class="px-8 py-2.5 bg-[var(--color-surface)] text-[var(--color-text)] text-sm font-medium rounded-[var(--radius-full)] border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] hover:border-[var(--color-text-secondary)]/30 transition-all duration-[var(--transition-normal)] disabled:opacity-50 active:scale-[0.98]"
           :disabled="loadingMore"

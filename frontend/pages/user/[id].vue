@@ -7,7 +7,7 @@
       <div class="relative rounded-2xl overflow-hidden mb-6 bg-[var(--color-surface)] border border-[var(--color-border)]/30">
         <!-- Subtle top accent bar — the signature element -->
         <div class="h-1 bg-[var(--color-primary)]/60" />
-        <div class="px-6 pt-5 pb-5">
+        <div class="px-6 pt-6 pb-6">
           <div class="flex flex-col sm:flex-row items-center sm:items-end gap-4">
             <!-- Avatar -->
             <div class="w-20 h-20 rounded-full bg-white flex items-center justify-center text-[var(--color-primary)] text-xl font-bold flex-shrink-0 overflow-hidden ring-4 ring-[var(--color-bg)] relative group"
@@ -126,7 +126,7 @@
       <!-- 投稿 Tab -->
       <div v-if="activeTab === 'videos'">
         <LoadingSpinner v-if="loadingVideos" />
-        <div v-else-if="videos.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div v-else-if="videos.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           <VideoCard v-for="v in videos" :key="v.id" :video="v" />
         </div>
         <EmptyState v-else message="还没有发布视频" />

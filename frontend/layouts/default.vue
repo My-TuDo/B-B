@@ -22,8 +22,8 @@ import Toast from '~/components/common/Toast.vue'
 const sidebarCollapsed = ref(false)
 
 const mainStyle = computed(() => ({
-  paddingTop: 'calc(var(--header-height) + 16px)',
-  maxWidth: '1920px',
+  paddingTop: 'calc(var(--header-height) + 24px)',
+  maxWidth: '1600px',
   marginLeft: sidebarCollapsed.value ? '72px' : '240px',
 }))
 
