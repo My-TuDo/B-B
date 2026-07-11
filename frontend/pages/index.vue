@@ -17,6 +17,9 @@
       </button>
     </div>
 
+    <!-- Carousel (hot tab only) -->
+    <VideoCarousel v-if="activeTab === 'hot' && carouselVideos.length > 0" :videos="carouselVideos" />
+
     <!-- Loading -->
     <LoadingSpinner v-if="loading" />
 

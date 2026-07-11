@@ -214,9 +214,6 @@ func (s *Service) DeleteVideo(ctx context.Context, userID uint, videoID uint) er
 	if video.UserID != userID {
 		return fmt.Errorf("video.service.DeleteVideo: %w", newError(errcode.Forbidden))
 	}
-	if video.Status != 0 {
-		return fmt.Errorf("video.service.DeleteVideo: only drafts can be deleted")
-	}
 
 	video.Status = 3 // soft delete
 	if err := s.repo.Update(ctx, video); err != nil {
