@@ -4,8 +4,10 @@
     <ErrorMessage v-else-if="error" :message="error" :on-retry="fetchAll" />
     <div v-else-if="user">
       <!-- Banner -->
-      <div class="relative rounded-2xl overflow-hidden mb-6 bg-gradient-to-br from-[var(--color-primary)]/10 via-[var(--color-surface)] to-[var(--color-primary)]/5 border border-[var(--color-border)]/30">
-        <div class="px-6 pt-6 pb-5">
+      <div class="relative rounded-2xl overflow-hidden mb-6 bg-[var(--color-surface)] border border-[var(--color-border)]/30">
+        <!-- Subtle top accent bar — the signature element -->
+        <div class="h-1 bg-[var(--color-primary)]/60" />
+        <div class="px-6 pt-5 pb-5">
           <div class="flex flex-col sm:flex-row items-center sm:items-end gap-4">
             <!-- Avatar -->
             <div class="w-20 h-20 rounded-full bg-white flex items-center justify-center text-[var(--color-primary)] text-xl font-bold flex-shrink-0 overflow-hidden ring-4 ring-[var(--color-bg)] relative group"
@@ -22,7 +24,7 @@
             <input ref="fileInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" @change="handleAvatarFile" />
 
             <div class="flex-1 text-center sm:text-left">
-              <h1 class="text-xl font-bold text-[var(--color-text)]">{{ user.nickname || user.username }}</h1>
+              <h1 class="text-xl font-bold text-[var(--color-text)] font-display">{{ user.nickname || user.username }}</h1>
               <p class="text-sm text-[var(--color-text-secondary)]">@{{ user.username }} · 注册于 {{ formatTime(user.created_at) }}</p>
             </div>
             <div class="flex items-center gap-2 flex-shrink-0">

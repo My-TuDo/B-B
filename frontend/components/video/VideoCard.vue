@@ -2,7 +2,7 @@
   <NuxtLink :to="`/video/${video.id}`" class="group block">
     <!-- Thumbnail -->
     <div
-      class="relative w-full bg-[var(--color-surface)] rounded-[var(--radius-md)] overflow-hidden transition-shadow duration-300 group-hover:shadow-lg group-hover:shadow-[var(--color-primary)]/10"
+      class="relative w-full bg-[var(--color-surface)] rounded-[var(--radius-md)] overflow-hidden ring-1 ring-[var(--color-border)]/30 transition-all duration-300 group-hover:shadow-[var(--shadow-hover)] group-hover:ring-[var(--color-primary)]/20"
       style="aspect-ratio: 16/9"
     >
       <!-- Cover image or gradient placeholder -->
@@ -19,47 +19,49 @@
       </div>
       <div
         v-else
-        class="w-full h-full flex items-center justify-center bg-gradient-to-br from-[var(--color-surface)] to-[var(--color-primary)]/20"
+        class="w-full h-full flex items-center justify-center bg-gradient-to-br from-[var(--color-surface)] via-[var(--color-surface-hover)] to-[var(--color-primary)]/10"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="currentColor" class="text-[var(--color-primary)]/30">
+        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="currentColor" class="text-[var(--color-primary)]/25">
           <polygon points="8,5 19,12 8,19" />
         </svg>
       </div>
 
       <!-- Hover overlay with play icon -->
       <div class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-300 flex items-center justify-center">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="48"
-          height="48"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          class="text-white opacity-0 group-hover:opacity-90 transition-opacity duration-300 scale-75 group-hover:scale-100 transition-transform duration-300"
-        >
-          <polygon points="8,5 19,12 8,19" />
-        </svg>
+        <div class="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 scale-75 group-hover:scale-100">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="white"
+            class="ml-0.5"
+          >
+            <polygon points="8,5 19,12 8,19" />
+          </svg>
+        </div>
       </div>
 
       <!-- Duration badge -->
       <div
         v-if="video.duration > 0"
-        class="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 bg-[var(--color-badge-bg)] text-white text-[11px] rounded font-medium tracking-wide"
+        class="absolute bottom-2 right-2 px-1.5 py-0.5 bg-[var(--color-badge-bg)] text-white text-[11px] rounded font-mono-data tracking-tight"
       >
         {{ formatDuration(video.duration) }}
       </div>
 
       <!-- Views badge -->
-      <div class="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 bg-[var(--color-badge-bg)] text-white text-[11px] rounded">
+      <div class="absolute bottom-2 left-2 px-1.5 py-0.5 bg-[var(--color-badge-bg)] text-white text-[11px] rounded leading-tight">
         {{ formatViews(video.views) }} 播放
       </div>
     </div>
 
     <!-- Info -->
-    <div class="mt-2.5 flex gap-2.5">
+    <div class="mt-3 flex gap-3">
       <!-- Uploader avatar -->
       <NuxtLink
         :to="`/user/${video.user?.id}`"
-        class="flex-shrink-0 w-8 h-8 rounded-full bg-white flex items-center justify-center text-[var(--color-primary)] text-xs font-bold overflow-hidden hover:ring-2 hover:ring-[var(--color-primary)]/40 transition-shadow"
+        class="flex-shrink-0 w-9 h-9 rounded-full bg-[var(--color-surface-hover)] flex items-center justify-center text-[var(--color-primary)] text-xs font-bold overflow-hidden ring-1 ring-[var(--color-border)]/30 group-hover:ring-[var(--color-primary)]/40 transition-all"
         @click.stop
       >
         <img v-if="video.user?.avatar" :src="video.user.avatar" class="w-full h-full object-cover" />
@@ -71,11 +73,11 @@
         <h3 class="text-sm text-[var(--color-text)] font-medium leading-snug line-clamp-2 group-hover:text-[var(--color-primary)] transition-colors duration-200">
           {{ video.title }}
         </h3>
-        <p class="mt-1 text-xs text-[var(--color-text-secondary)] leading-relaxed">
+        <p class="mt-1 text-xs text-[var(--color-text-secondary)] leading-relaxed truncate">
           {{ video.user?.nickname || video.user?.username || '未知用户' }}
         </p>
-        <p class="text-[11px] text-[var(--color-text-secondary)]/70 leading-relaxed">
-          {{ formatViews(video.views) }} 播放 <span class="mx-1 text-[var(--color-text-secondary)]/40">-</span> {{ formatTime(video.created_at) }}
+        <p class="text-[11px] text-[var(--color-text-secondary)]/70 leading-relaxed mt-0.5">
+          {{ formatViews(video.views) }} 播放 <span class="mx-1 text-[var(--color-text-secondary)]/30">·</span> {{ formatTime(video.created_at) }}
         </p>
       </div>
     </div>

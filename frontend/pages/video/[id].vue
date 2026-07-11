@@ -143,7 +143,7 @@
 
         <!-- Video info -->
         <div class="mt-5">
-          <h1 class="text-xl font-bold text-[var(--color-text)] leading-snug">{{ video.title }}</h1>
+          <h1 class="text-xl font-bold text-[var(--color-text)] leading-snug font-display">{{ video.title }}</h1>
 
           <!-- UP主 + interaction buttons row -->
           <div class="flex flex-wrap items-center justify-between gap-3 mt-4">
