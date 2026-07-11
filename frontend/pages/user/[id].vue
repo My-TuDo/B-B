@@ -95,7 +95,7 @@
           <div v-if="publicFavorites.length > 0">
             <div class="flex items-center justify-between mb-3">
               <h3 class="text-base font-semibold text-[var(--color-text)]">收藏</h3>
-              <NuxtLink to="?tab=favorites" class="text-xs text-[var(--color-primary)] hover:underline">查看更多 →</NuxtLink>
+              <NuxtLink :to="`/user/${userId}?tab=favorites`" class="text-xs text-[var(--color-primary)] hover:underline">查看更多 →</NuxtLink>
             </div>
             <div class="flex gap-4 overflow-x-auto pb-2">
               <NuxtLink v-for="fav in publicFavorites.slice(0, 5)" :key="fav.id" :to="`/favorites/${fav.id}`"
