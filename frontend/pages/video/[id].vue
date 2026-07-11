@@ -343,6 +343,7 @@ import CommentList from '~/components/comment/CommentList.vue'
 
 const { get, post } = useApi()
 const route = useRoute()
+const router = useRouter()
 const userStore = useUserStore()
 const { showToast } = useToast()
 

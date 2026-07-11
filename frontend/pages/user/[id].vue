@@ -164,6 +164,7 @@ import { useUserStore } from '~/stores/userStore'
 import { useToast } from '~/composables/useToast'
 import VideoCard from '~/components/video/VideoCard.vue'
 import AppModal from '~/components/common/AppModal.vue'
+import EmptyState from '~/components/common/EmptyState.vue'
 
 const { get, put, post } = useApi()
 const route = useRoute()
