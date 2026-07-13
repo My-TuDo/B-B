@@ -1,167 +1,132 @@
 # B-B
 
-> B 站风格视频平台 — Go + Nuxt 全栈项目（仿 B 站）
+> 仿制 B 站项目介绍与技术分析 — Go + Nuxt 全栈实现
 
-## 技术栈
+## 项目概述
 
-| 层 | 技术 |
-|----|------|
-| 后端 | Go 1.23+ / Gin / GORM / MySQL 8.0 / Redis 7 / MinIO / RabbitMQ |
-| 前端 | Nuxt 4 / Vue 3 / TypeScript / Tailwind CSS / Video.js / hls.js |
-| 基础设施 | Docker Compose / Nginx / ffmpeg / Let's Encrypt(可选) |
+B-B 是一个仿 B 站的视频分享平台，从前端 UI 到后端 API 完整实现。项目采用**渐进式开发**，从核心骨架到媒体处理，分 5 个阶段迭代，每个阶段产出可演示的完整功能。
 
-## 快速启动（Docker 一键部署）
+核心技术决策围绕三个目标：**高并发可扩展**（Go + Redis + RabbitMQ）、**开发体验**（Nuxt 4 SSR + Tailwind 暗色双模）和**可学习性**（清晰的 Handler → Service → Repository 三层架构，中文注释覆盖所有文件）。
 
-```bash
-# 一键部署（SSL 证书自动生成 + 构建 + 启动）
-./deploy.sh
+## 技术架构
 
-# 访问
-#    前端: https://localhost
-#    MinIO Console: http://localhost:9001 (minioadmin/minioadmin)
-#    RabbitMQ: http://localhost:15672 (guest/guest)
-
-# 单独启动（不运行部署脚本）
-docker compose up -d
+```
+浏览器 ──→ Nginx (443 HTTPS) ──→ Nuxt SSR (3000)  前端页面渲染
+                              ──→ Go API  (8080)   后端 JSON API
+                                       ├── MySQL   业务数据
+                                       ├── Redis   缓存 + Token 白名单
+                                       ├── MinIO   视频/图片存储
+                                       └── RabbitMQ 异步转码队列
 ```
 
-## 本地开发
+### 选型分析
+
+| 技术 | 选择原因 |
+|------|---------|
+| **Go + Gin** | 原生并发 + 低内存，适合 I/O 密集的视频服务 |
+| **GORM** | AutoMigrate 根据 struct 自动建表/更新，减少 SQL 手写 |
+| **Nuxt 4 SSR** | 服务端渲染保证 SEO，同时支持 SPA 客户端导航 |
+| **MinIO** | S3 兼容、Docker 单容器部署，bucket 公开策略免去 CDN |
+| **Redis** | Token 白名单（支持强制下线）+ 排行榜 ZSet + 热度缓存 |
+| **RabbitMQ** | 异步解耦视频转码，不可用时降级为 goroutine 直调 |
+
+### 后端三层架构
+
+```
+Handler  ─→  HTTP 层：解析请求参数，调用 Service，返回统一 JSON
+Service  ─→  业务逻辑：校验权限，编排多个 Repository，缓存/通知
+Repository →  数据访问：封装 GORM 查询，单表操作
+```
+
+这种分层的核心价值：**Handler 不知道表名，Repository 不知道 HTTP，Service 不知道 Gin**。每一层只依赖下一层的接口，测试时可以独立 mock。
+
+### 安全体系
+
+| 层 | 机制 | 原理 |
+|----|------|------|
+| 认证 | JWT + Redis 白名单 | Cookie 传递 token，Redis 存储最新 token 支持服务端踢人 |
+| 防 CSRF | Double-Submit Cookie | 前端读 Cookie 写 Header，恶意网站无法读取跨域 Cookie |
+| 限流 | 令牌桶 + IP 计数 | 全局 100 req/s + 登录接口 IP 粒度 5 次/分钟 |
+| 文件校验 | MIME + 魔数 + 大小 | 读文件头 512 字节用 `http.DetectContentType` 验真伪 |
+
+## 快速开始
 
 ```bash
-# 启动依赖服务
+# 一键部署（自动生成 SSL 证书 + 构建 + 启动）
+./deploy.sh
+
+# 或分步启动
+docker compose up -d
+
+# 本地开发（只启动依赖，前后端单独跑）
 docker compose up -d mysql redis minio rabbitmq
-
-# 终端 1: 后端
 cd backend && go run ./cmd/server/main.go
-
-# 终端 2: 前端
 cd frontend && pnpm install && pnpm dev
 ```
 
-> 前端开发时通过 Nuxt 代理 `/api/*` → `localhost:8080`，MinIO 通过 Docker DNS `minio:9000` 访问
+## 后端架构详解
 
-## 一键部署
-
-```bash
-./deploy.sh
-```
-
-脚本会：
-1. 检查 Docker / Docker Compose 环境
-2. 生成自签名 SSL 证书（首次运行）
-3. `docker compose build` 构建镜像
-4. `docker compose up -d` 启动全部服务
-5. 等待后端健康检查通过
-
-入口网关：
-- **80** → **443** HTTPS 301 跳转
-- **443** → 前端页面（Nuxt SSR） / API 反向代理
-
-## 数据备份与恢复
-
-```bash
-# 备份（MySQL + Redis + MinIO）
-./scripts/backup.sh
-
-# 恢复 MySQL
-./scripts/restore-mysql.sh ./backups/mysql/daily/bb_20260710_030000.sql.gz
-```
-
-备份数据保存在 `./backups/`，MySQL 保留最近 7 天。
-
-## 项目结构
+### 启动流程
 
 ```
-B-B/
-├── backend/
-│   ├── cmd/server/main.go          # 入口
-│   ├── internal/
-│   │   ├── handler/                # HTTP 层 (12 模块)
-│   │   ├── service/                # 业务逻辑层
-│   │   ├── repository/             # 数据访问层
-│   │   ├── model/                  # Entity + DTO
-│   │   ├── middleware/             # Recovery/Logger/CORS/RateLimit/Auth/CSRF
-│   │   └── worker/                 # 转码 Worker (ffmpeg)
-│   ├── pkg/                        # 公共包 (config/database/jwt/response/storage/rabbitmq)
-│   └── migrations/                 # SQL 迁移
-├── frontend/
-│   ├── pages/                      # 文件路由 (12+ 页面)
-│   ├── components/                 # 通用 + 业务组件
-│   ├── composables/                # useApi/useToast/useTheme
-│   ├── stores/                     # Pinia (userStore / playerStore / danmakuStore)
-│   ├── layouts/                    # default / auth
-│   └── middleware/                 # auth / guest
-├── nginx/
-│   ├── Dockerfile                  # nginx + SSL 证书
-│   ├── nginx.conf                  # HTTPS 反向代理配置
-│   └── ssl/generate.sh             # 自签名证书生成
-├── scripts/
-│   ├── backup.sh                   # 数据备份脚本
-│   └── restore-mysql.sh            # MySQL 恢复脚本
-├── deploy.sh                       # 一键部署脚本
-└── docker-compose.yml              # 全部 8 个服务
+config.Load() → logger.Init() → jwt.Init() → validator.Init()
+  → database.InitMySQL() → database.InitRedis() → storage.Init(MinIO)
+  → middleware.InitAuth() → ws.InitHub()
+  → db.AutoMigrate(14 models) → seedCategories()
+  → rabbitmq.Init() → 启动 Consumer goroutine
+  → gin.New() + 中间件链 → 19 模块注册路由 → r.Run(":8080")
 ```
 
-## 功能清单
+### 中间件链（按序执行）
 
-### 阶段一 — 核心骨架
-- 用户注册 / 登录 / 登出（JWT + Redis 白名单 + HttpOnly Cookie）
-- 视频上传（MinIO + SSE 实时进度 + MIME/魔数/大小三重校验）
-- 视频播放（MinIO 预签名 URL）+ 分类浏览
-- 稿件管理（草稿/已发布/已删除 Tab + 编辑/删除）
-- 暗色 / 亮色双模切换（CSS 变量 + localStorage）
-- 侧边栏（展开 240px / 折叠 72px）+ 7 个分类
-- 限流（5 次/s）、文件 MIME+魔数校验（≤500MB）
+| 顺序 | 中间件 | 职责 |
+|------|--------|------|
+| 1 | Recovery | panic 捕获 + 堆栈日志 + 500 响应 |
+| 2 | RequestID | 生成/继承 UUID，写回响应头 |
+| 3 | Logger | 结构化请求日志（method/path/status/latency/requestID） |
+| 4 | CORS | 跨域白名单 + OPTIONS 预检 204 直返 |
+| 5 | RateLimit | 全局令牌桶 + 登录接口 IP 级限流 |
+| 6 | CSRF | 写请求强制比对 Header.CSRF-Token 与 Cookie.csrf_token |
+| * | AuthRequired | 路由级：JWT 解析 + Redis 白名单验证 |
 
-### 阶段二 — 内容消费
-- 首页推荐（热度算法 `views×0.5+likes×2+comments×3-hours×0.1`，Redis 10min 缓存）
-- 排行榜（日/周/总，Redis ZSet）
-- 全文搜索（MySQL FULLTEXT → LIKE 降级）+ 关键词提示
-- 分区 Tab + 分页
-- 标签系统（多对多）
-- 观看历史 + 断点续播
-- UP 主创作中心（视频管理 + 播放数据）
-- Admin 审核队列（role≥2/3）+ CSRF Token
+### 请求生命周期（以点赞为例）
 
-### 阶段三 — 社区互动
-- 弹幕系统（WebSocket 实时 + REST 历史 + Bilibili 风格 RAF 时间驱动）
-- 评论（楼中楼两层 + 排序 + Redis 点赞）
-- 三连（点赞/投币限 5 枚/天/收藏多收藏夹）
-- 关注/粉丝 + Feed 信息流
-- 消息通知（评论回复/点赞/关注）
-- 用户空间（视频/收藏/动态）
-- 头像上传（JPEG/PNG/WebP ≤2MB，MinIO 存储+直接 URL）
-- 分享链接
+```
+POST /api/v1/videos/7/like
+  → Recovery → RequestID → Logger → CORS → RateLimit → CSRF
+  → AuthRequired（JWT 验证 + Redis 白名单）
+  → handler.ToggleLike
+    → c.Param("id") → 7，middleware.GetUserID(c) → 4
+    → svc.ToggleLike(ctx, 4, 7)
+      → repo.Exists(ctx, 4, 7)        → SELECT COUNT(*) FROM video_likes
+      → repo.Delete/Create             → INSERT/DELETE
+      → videoRepo.IncrementLikeCount   → UPDATE videos SET likes = likes ± 1
+      → messageSvc.NotifyAuthor        → INSERT notifications
+    → response.Success(c, {liked, count})
+  → 返回 {"code":200, "message":"成功", "data":{...}, "request_id":"uuid"}
+```
 
-### 阶段四 — 媒体处理
-- 自动转码（360p/480p/720p/1080p，RabbitMQ 异步队列）
-- HLS 分片 + m3u8 索引
-- ffprobe 元数据提取（duration/width/height/codec/bitrate）
-- 自动封面截取（ffmpeg 第一帧，不覆盖用户上传）
-- 清晰度切换（前端保持播放进度）
-- 降级策略（RabbitMQ 不可用→goroutine 直调 / ffmpeg 不可用→原始 mp4 兜底）
-- Admin Dashboard（统计卡片 + 用户管理 + 角色编辑 + 系统配置）
+## 核心功能实现分析
 
-### 阶段五 — 部署运维
-- Docker 多阶段构建（后端 < 100MB）
-- Nginx 反向代理（HTTPS + HTTP→HTTPS 跳转 + 安全头 + Gzip）
-- 自签名 SSL 证书（dev/demo，可选 Let's Encrypt）
-- Admin 系统配置页（Go 版本 / 运行时间 / 数据库连接状态）
-- gin-prometheus `/metrics` 端点暴露
-- 数据备份脚本（MySQL dump + Redis RDB + MinIO mirror）
-- 一键部署脚本 `deploy.sh`
+### 视频上传与转码
 
-## 基础设施
+视频上传采用 **SSE 流式进度**：自定义 `progressReader` 包装 `io.Reader`，每次读块回调进度百分比，通过 `c.Stream()` 推给前端。
 
-| 服务 | 内部端口 | 外部端口 | 说明 |
-|------|---------|---------|------|
-| nginx | 80/443 | 80/443 | 反向代理入口（HTTPS） |
-| backend | 8080 | — | Go API |
-| frontend | 3000 | — | Nuxt SSR |
-| mysql | 3306 | 3307 | 数据库 |
-| redis | 6379 | 6379 | 缓存 + Token 白名单 |
-| minio | 9000/9001 | 9001 | 对象存储（API/Console） |
-| rabbitmq | 5672/15672 | 5672/15672 | 转码消息队列 |
+上传后触发转码：优先 RabbitMQ 异步队列，连不上则 goroutine 直调。转码 Worker 调用 ffmpeg 输出 360p/480p/720p/1080p 四档 HLS（m3u8 + ts 分片），同时 ffprobe 提取元数据写入 `video_metas` 表。
+
+### 弹幕系统（Bilibili 风格）
+
+弹幕引擎采用 **requestAnimationFrame 循环 + 视频时间驱动**，每条弹幕位置由 `(currentTime - play_time) / 4s` 实时计算。暂停/回退/快进时，弹幕位置同步跟随视频进度，不再使用 CSS 固定时长的 animation。
+
+WebSocket Hub 按 videoID 分房间广播，REST API 拉取历史弹幕。
+
+### 热度算法与缓存
+
+首页推荐使用加权公式：`views×0.5 + likes×2 + comments×3 - hours×0.1`，通过 Redis ZSet 排序，TTL 10 分钟。排行榜按 views 用 ZSet 维护日/周/总三个维度。
+
+### 缩略图与封面
+
+自动封面由转码 Worker 在检测到 `cover_url` 为空时调用 ffmpeg 截取第一帧（`-ss 00:00:01 -vframes 1`）。已上传自定义封面的视频不覆盖。
 
 ## API 接口
 
@@ -185,7 +150,7 @@ B-B/
 ### 视频
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/api/v1/videos` | 上传视频（+可选封面，SSE 进度） |
+| POST | `/api/v1/videos` | 上传视频（SSE 进度） |
 | GET | `/api/v1/videos` | 视频列表（分页+分类） |
 | GET | `/api/v1/videos/:id` | 视频详情 |
 | GET | `/api/v1/videos/:id/play-url` | 播放地址 |
@@ -195,65 +160,47 @@ B-B/
 | GET | `/api/v1/videos/ranking` | 排行榜 |
 | PUT | `/api/v1/videos/:id` | 更新视频 |
 | DELETE | `/api/v1/videos/:id` | 删除视频 |
-| GET | `/api/v1/videos/users/:id/videos` | 用户视频列表 |
-
-### 标签 / 分类 / 搜索
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/v1/categories` | 分类列表 |
-| GET/POST | `/api/v1/tags` | 标签列表 / 创建 |
-| POST | `/api/v1/videos/:id/tags` | 设置视频标签 |
-| GET | `/api/v1/search` | 搜索 |
-| GET | `/api/v1/search/suggestions` | 搜索建议 |
 
 ### 社区
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET/POST | `/api/v1/videos/:id/danmaku` | 弹幕列表/发送 |
 | WS | `/api/v1/ws/danmaku/:video_id` | 弹幕 WebSocket |
+| GET/POST | `/api/v1/videos/:id/danmaku` | 弹幕历史/发送 |
 | GET/POST | `/api/v1/videos/:id/comments` | 评论列表/创建 |
-| POST | `/api/v1/comments/:id/like` | 评论点赞/取消 |
-| POST | `/api/v1/videos/:id/like` | 视频点赞/取消 |
+| POST | `/api/v1/videos/:id/like` | 点赞/取消 |
 | POST | `/api/v1/videos/:id/coin` | 投币 |
-| GET/POST | `/api/v1/favorites` | 收藏夹列表/创建 |
-| POST | `/api/v1/favorites/:id/items` | 收藏/取消视频 |
+| GET/POST | `/api/v1/favorites` | 收藏夹 |
 | GET | `/api/v1/history` | 观看历史 |
-| POST | `/api/v1/history` | 记录进度 |
 | GET | `/api/v1/feed` | 关注 Feed |
-| GET | `/api/v1/notifications` | 消息通知 |
 
-### 创作中心
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/v1/creator/videos` | 我的视频 |
-| GET | `/api/v1/creator/stats` | 创作数据 |
-
-### 管理员（role≥3）
+### 管理员（role ≥ 3）
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/api/v1/admin/stats` | 统计面板 |
 | GET | `/api/v1/admin/users` | 用户管理 |
 | PUT | `/api/v1/admin/users/:id/role` | 修改角色 |
-| GET | `/api/v1/admin/videos` | 视频审核 |
-| PUT | `/api/v1/admin/videos/:id/review` | 审核操作 |
-| GET | `/api/v1/admin/system` | 系统配置信息 |
+| GET | `/api/v1/admin/system` | 系统配置 |
 
-### 安全
-- `X-CSRF-Token` Header 保护（POST/PUT/DELETE）
-- JWT HttpOnly Cookie + Redis 白名单
-- 路由级限流（5 次/s）
-- 文件上传三重校验（MIME → 魔数 → 大小）
-- HTTPS + 安全头（HSTS/X-Content-Type-Options/X-Frame-Options）
+## 基础设施配置
 
-## 开发阶段
+| 服务 | 用途 | 内部端口 | 外部端口 |
+|------|------|---------|---------|
+| nginx | HTTPS 反向代理 | 80/443 | 80/443 |
+| backend | Go API 服务 | 8080 | — |
+| frontend | Nuxt SSR | 3000 | — |
+| mysql | 业务数据 | 3306 | 3307 |
+| redis | 缓存 + Token | 6379 | 6379 |
+| minio | 对象存储 | 9000/9001 | 9001 |
+| rabbitmq | 转码队列 | 5672/15672 | 5672/15672 |
 
-| 阶段 | 说明 | 状态 |
-|------|------|------|
-| 阶段一 | 核心骨架（注册/登录/上传/播放） | 🔒 locked |
-| 阶段二 | 内容消费（首页/排行榜/搜索/历史） | 🔒 locked |
-| 阶段三 | 社区互动（弹幕/评论/三连/关注/通知） | 🔒 locked |
-| 阶段四 | 媒体处理（转码/HLS/封面/Admin Dashboard） | 🔒 locked |
-| 阶段五 | 部署运维（HTTPS/Nginx/备份/一键部署） | ✅ implementing |
+## 部署与运维
+
+```bash
+./deploy.sh                    # 一键部署（构建 + 启动 + 健康检查）
+./backup.sh                    # 备份 MySQL + Redis RDB + MinIO
+./restore-mysql.sh <file>     # 恢复 MySQL
+docker compose logs -f backend # 查看后端日志
+```
 
 ## License
 
