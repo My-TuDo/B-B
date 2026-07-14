@@ -212,9 +212,9 @@ func (s *Service) UpdateVideo(ctx context.Context, userID uint, videoID uint, re
 				if task.Status != tmodel.StatusDone {
 					switch task.Status {
 					case tmodel.StatusFailed:
-						return nil, fmt.Errorf("video.service.UpdateVideo: 转码失败，无法发布。请重新上传视频")
+						return nil, fmt.Errorf("video.service.UpdateVideo: %w", newError(errcode.TranscodeFailed))
 					default:
-						return nil, fmt.Errorf("video.service.UpdateVideo: 转码未完成 (%d%%)，请等待转码结束后再发布", task.Progress)
+						return nil, fmt.Errorf("video.service.UpdateVideo: %w", newError(errcode.TranscodeNotReady))
 					}
 				}
 			}

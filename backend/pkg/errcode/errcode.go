@@ -72,6 +72,8 @@ const (
 	InvalidFileType  = 4004
 	CoverUploadFail  = 4005
 	AvatarUploadFail = 4006
+	TranscodeFailed  = 4007
+	TranscodeNotReady = 4008
 
 	// 业务错误码 — 分类
 	CategoryNotFound = 5001
