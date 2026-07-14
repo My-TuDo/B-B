@@ -2,7 +2,7 @@
 
 > 基于 Go + Nuxt 的全栈仿 B 站视频分享平台
 
-项目效果展示：[ 视频或截图链接待补充 ]
+项目效果展示：【基于 Golang 开发的个人项目展示】 https://www.bilibili.com/video/BV1GsN96WEm4/?share_source=copy_web&vd_source=9a1465fce1ee0a5c91b425f0555d529c
 
 ---
 
