@@ -11,28 +11,36 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// CSRFConfig CSRF 防护配置。
 type CSRFConfig struct {
-	// PublicPaths are paths that skip CSRF check (GET/HEAD/OPTIONS already skipped).
-	// These are for public write routes like login/register.
+	// PublicPaths 跳过 CSRF 检查的路径列表（GET/HEAD/OPTIONS 已自动跳过）。
+	// 用于登录、注册等公开写接口。
 	PublicPaths []string
 }
 
+// defaultPublicPaths 默认公开路径：注册、登录、刷新 Token。
 var defaultPublicPaths = []string{
 	"/api/v1/auth/register",
 	"/api/v1/auth/login",
 	"/api/v1/auth/refresh",
 }
 
+// CSRF 返回 CSRF 防护中间件。
+//
+// 防护策略（Double Submit Cookie）：
+//  1. GET/HEAD/OPTIONS 请求直接放行
+//  2. 公开路径（注册/登录）直接放行
+//  3. 其他写请求必须携带 X-CSRF-Token 头，且与 csrf_token Cookie 值一致
 func CSRF() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Skip GET, HEAD, OPTIONS
+		// GET、HEAD、OPTIONS 不检查 CSRF
 		method := c.Request.Method
 		if method == "GET" || method == "HEAD" || method == "OPTIONS" {
 			c.Next()
 			return
 		}
 
-		// Skip public paths
+		// 公开路径跳过检查
 		path := c.Request.URL.Path
 		for _, pp := range defaultPublicPaths {
 			if path == pp {
@@ -41,7 +49,7 @@ func CSRF() gin.HandlerFunc {
 			}
 		}
 
-		// Check CSRF header vs cookie
+		// 检查 X-CSRF-Token 请求头
 		csrfHeader := c.GetHeader("X-CSRF-Token")
 		if csrfHeader == "" {
 			response.Error(c, http.StatusForbidden, errcode.Forbidden, "CSRF token缺失")
@@ -49,6 +57,7 @@ func CSRF() gin.HandlerFunc {
 			return
 		}
 
+		// 检查 csrf_token Cookie
 		csrfCookie, err := c.Cookie("csrf_token")
 		if err != nil || csrfCookie == "" {
 			response.Error(c, http.StatusForbidden, errcode.Forbidden, "CSRF cookie缺失")
@@ -56,6 +65,7 @@ func CSRF() gin.HandlerFunc {
 			return
 		}
 
+		// 比较 Header 和 Cookie 中的 Token（大小写不敏感）
 		if !strings.EqualFold(csrfHeader, csrfCookie) {
 			response.Error(c, http.StatusForbidden, errcode.Forbidden, "CSRF token不匹配")
 			c.Abort()
@@ -66,7 +76,7 @@ func CSRF() gin.HandlerFunc {
 	}
 }
 
-// GenerateCSRFToken generates a random 32-byte hex string.
+// GenerateCSRFToken 生成 32 字节随机数的十六进制字符串。
 func GenerateCSRFToken() (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
@@ -75,11 +85,13 @@ func GenerateCSRFToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// SetCSRFCookie sets the csrf_token cookie and returns the token value.
+// SetCSRFCookie 设置 csrf_token Cookie 并返回 Token 值。
+// Cookie 属性：SameSite=Lax，有效期 24 小时，HttpOnly=false（前端需读取）。
 func SetCSRFCookie(c *gin.Context) string {
 	token, err := GenerateCSRFToken()
 	if err != nil {
-		token = hex.EncodeToString(make([]byte, 32)) // fallback
+		// 生成失败时使用降级方案
+		token = hex.EncodeToString(make([]byte, 32))
 	}
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("csrf_token", token, 86400, "/", "", false, false)

@@ -1,3 +1,5 @@
+// Package danmaku 提供弹幕相关的 HTTP 处理器，包括弹幕列表获取、
+// 发送弹幕以及 WebSocket 实时弹幕连接管理。
 package danmaku
 
 import (
@@ -14,14 +16,17 @@ import (
 	"go.uber.org/zap"
 )
 
+// Handler 是弹幕模块的 HTTP 处理器，持有弹幕服务实例。
 type Handler struct {
 	svc *danmakuservice.Service
 }
 
+// NewHandler 创建弹幕处理器实例。
 func NewHandler(svc *danmakuservice.Service) *Handler {
 	return &Handler{svc: svc}
 }
 
+// GetDanmaku 获取指定视频的所有弹幕列表（公开接口）。
 func (h *Handler) GetDanmaku(c *gin.Context) {
 	videoID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
@@ -39,6 +44,8 @@ func (h *Handler) GetDanmaku(c *gin.Context) {
 	response.Success(c, resps)
 }
 
+// SendDanmaku 发送一条弹幕（需认证）。
+// 弹幕内容长度限制为 1-200 字符，包含文本、出现时间和颜色等信息。
 func (h *Handler) SendDanmaku(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	if userID == 0 {
@@ -58,6 +65,7 @@ func (h *Handler) SendDanmaku(c *gin.Context) {
 		return
 	}
 
+	// 弹幕内容长度校验（1-200 字符）
 	if req.Content == "" || len(req.Content) > 200 {
 		response.Error(c, http.StatusBadRequest, errcode.BadRequest, "弹幕内容1-200字符")
 		return

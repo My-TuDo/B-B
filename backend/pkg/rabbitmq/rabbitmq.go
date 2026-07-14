@@ -1,3 +1,6 @@
+// Package rabbitmq 提供 RabbitMQ 消息队列的连接管理和发布/消费操作。
+// 用于将视频转码任务异步投递到队列，由 Worker 消费处理。
+// 支持断线重连（最多 5 次），队列声明为持久化。
 package rabbitmq
 
 import (
@@ -9,39 +12,42 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
+// queueTranscode 视频转码队列名称。
 const (
 	queueTranscode = "video.transcode"
 )
 
-// TranscodeMessage is the payload published to the transcode queue.
+// TranscodeMessage 转码任务消息体。
 type TranscodeMessage struct {
-	VideoID uint `json:"video_id"`
+	VideoID uint `json:"video_id"` // 待转码的视频 ID
 }
 
-// Client wraps an AMQP connection and channel for publishing.
+// Client 封装 AMQP 连接和通道，用于发布和消费消息。
 type Client struct {
-	conn    *amqp.Connection
-	channel *amqp.Channel
-	mu      sync.Mutex
-	done    chan struct{}
+	conn    *amqp.Connection // AMQP 连接
+	channel *amqp.Channel    // AMQP 通道
+	mu      sync.Mutex       // 发布操作互斥锁
+	done    chan struct{}    // 关闭信号通道
 }
 
-// Config holds RabbitMQ connection parameters.
+// Config RabbitMQ 连接参数。
 type Config struct {
-	Host     string
-	Port     string
-	User     string
-	Password string
+	Host     string // 主机地址
+	Port     string // 端口
+	User     string // 用户名
+	Password string // 密码
 }
 
-// Init creates a RabbitMQ connection, declares the transcode queue, and returns a Client.
+// Init 连接 RabbitMQ，声明转码队列，返回 Client。
+// 连接失败会重试最多 5 次，每次间隔 2 秒。
 func Init(cfg *Config) (*Client, error) {
+	// 构造 AMQP DSN
 	dsn := fmt.Sprintf("amqp://%s:%s@%s:%s/", cfg.User, cfg.Password, cfg.Host, cfg.Port)
 
 	var conn *amqp.Connection
 	var err error
 
-	// Retry connecting up to 5 times
+	// 重试连接，最多 5 次
 	for i := 0; i < 5; i++ {
 		conn, err = amqp.Dial(dsn)
 		if err == nil {
@@ -53,20 +59,21 @@ func Init(cfg *Config) (*Client, error) {
 		return nil, fmt.Errorf("rabbitmq.Init: dial failed: %w", err)
 	}
 
+	// 打开通道
 	ch, err := conn.Channel()
 	if err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("rabbitmq.Init: open channel failed: %w", err)
 	}
 
-	// Declare a durable queue
+	// 声明持久化队列（durable=true，服务重启后队列不丢失）
 	_, err = ch.QueueDeclare(
-		queueTranscode,
-		true,  // durable
-		false, // auto-delete
-		false, // exclusive
-		false, // no-wait
-		nil,
+		queueTranscode, // 队列名
+		true,           // durable — 持久化
+		false,          // auto-delete — 不自动删除
+		false,          // exclusive — 非独占
+		false,          // no-wait — 等待服务器确认
+		nil,            // 额外参数
 	)
 	if err != nil {
 		ch.Close()
@@ -81,26 +88,29 @@ func Init(cfg *Config) (*Client, error) {
 	}, nil
 }
 
-// PublishTranscodeTask sends a transcode job to the queue.
+// PublishTranscodeTask 将转码任务发布到队列。
+// 消息体为 JSON 序列化的 TranscodeMessage，投递模式为持久化。
 func (c *Client) PublishTranscodeTask(videoID uint) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// 构造消息体
 	msg := TranscodeMessage{VideoID: videoID}
 	body, err := json.Marshal(msg)
 	if err != nil {
 		return fmt.Errorf("rabbitmq.PublishTranscodeTask: marshal: %w", err)
 	}
 
+	// 发布到默认 exchange，routing key 为队列名
 	err = c.channel.Publish(
-		"",               // exchange
-		queueTranscode,   // routing key
-		false,            // mandatory
-		false,            // immediate
+		"",             // exchange — 使用默认交换机
+		queueTranscode, // routing key — 队列名
+		false,          // mandatory
+		false,          // immediate
 		amqp.Publishing{
 			ContentType:  "application/json",
 			Body:         body,
-			DeliveryMode: amqp.Persistent,
+			DeliveryMode: amqp.Persistent, // 消息持久化
 		},
 	)
 	if err != nil {
@@ -109,16 +119,17 @@ func (c *Client) PublishTranscodeTask(videoID uint) error {
 	return nil
 }
 
-// ConsumeTranscodeTask returns a channel of TranscodeMessage deliveries.
+// ConsumeTranscodeTask 返回转码队列的消费通道。
+// 使用手动确认模式（auto-ack=false），消费方需显式 Ack/Nack。
 func (c *Client) ConsumeTranscodeTask() (<-chan amqp.Delivery, error) {
 	deliveries, err := c.channel.Consume(
-		queueTranscode,
-		"",    // consumer tag
-		false, // auto-ack
-		false, // exclusive
-		false, // no-local
-		false, // no-wait
-		nil,
+		queueTranscode, // 队列名
+		"",             // consumer tag — 自动生成
+		false,          // auto-ack — 手动确认
+		false,          // exclusive — 非独占
+		false,          // no-local
+		false,          // no-wait
+		nil,            // 额外参数
 	)
 	if err != nil {
 		return nil, fmt.Errorf("rabbitmq.ConsumeTranscodeTask: %w", err)
@@ -126,7 +137,7 @@ func (c *Client) ConsumeTranscodeTask() (<-chan amqp.Delivery, error) {
 	return deliveries, nil
 }
 
-// Close shuts down the channel and connection.
+// Close 关闭通道和连接，发送 done 信号。
 func (c *Client) Close() {
 	close(c.done)
 	if c.channel != nil {

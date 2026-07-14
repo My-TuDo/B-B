@@ -1,3 +1,6 @@
+// Package admin 提供管理后台相关的 HTTP 处理器，包括视频审核、
+// 数据统计看板、用户管理、系统信息查询以及用户角色管理等功能。
+// 所有接口均要求 role >= 3（管理员权限）。
 package admin
 
 import (
@@ -16,26 +19,33 @@ import (
 	"gorm.io/gorm"
 )
 
+// Handler 是管理后台的 HTTP 处理器，持有数据库实例、视频仓库和管理服务。
 type Handler struct {
 	db   *gorm.DB
 	repo *videorepo.Repository
 	svc  *adminservice.Service
 }
 
+// NewHandler 创建管理后台处理器实例。
 func NewHandler(db *gorm.DB, repo *videorepo.Repository, svc *adminservice.Service) *Handler {
 	return &Handler{db: db, repo: repo, svc: svc}
 }
 
+// AdminVideos 获取管理后台视频列表（需 role >= 3）。
+// 支持按审核状态筛选和分页。
 func (h *Handler) AdminVideos(c *gin.Context) {
+	// 权限校验：仅管理员可访问
 	role := middleware.GetRole(c)
 	if role < 3 {
 		response.Error(c, http.StatusForbidden, errcode.Forbidden, errcode.Message(errcode.Forbidden))
 		return
 	}
 
+	// 分页参数
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "12"))
 
+	// 状态过滤器，默认为 2（待审核）
 	var statusFilter int8 = 2
 	statusStr := c.DefaultQuery("status", "2")
 	if s, err := strconv.ParseInt(statusStr, 10, 8); err == nil {
@@ -52,7 +62,10 @@ func (h *Handler) AdminVideos(c *gin.Context) {
 	response.Success(c, resp)
 }
 
+// Review 审核视频（需 role >= 3）。
+// 将视频状态更新为 1（通过）或 3（驳回）。
 func (h *Handler) Review(c *gin.Context) {
+	// 权限校验
 	role := middleware.GetRole(c)
 	if role < 3 {
 		response.Error(c, http.StatusForbidden, errcode.Forbidden, errcode.Message(errcode.Forbidden))
@@ -72,11 +85,13 @@ func (h *Handler) Review(c *gin.Context) {
 		return
 	}
 
+	// 审核状态仅允许 1（通过）或 3（驳回）
 	if req.Status != 1 && req.Status != 3 {
 		response.Error(c, http.StatusBadRequest, errcode.BadRequest, "status只能为1或3")
 		return
 	}
 
+	// 查找目标视频
 	video, err := h.repo.FindByID(c.Request.Context(), uint(videoID))
 	if err != nil {
 		logger.Error("admin review find failed", zap.Error(err))
@@ -88,6 +103,7 @@ func (h *Handler) Review(c *gin.Context) {
 		return
 	}
 
+	// 更新视频审核状态并持久化
 	video.Status = req.Status
 	if err := h.repo.Update(c.Request.Context(), video); err != nil {
 		logger.Error("admin review update failed", zap.Error(err))
@@ -98,8 +114,10 @@ func (h *Handler) Review(c *gin.Context) {
 	response.Success(c, nil)
 }
 
-// Stats returns dashboard aggregate statistics. role >= 3 only.
+// Stats 返回管理后台仪表盘聚合统计数据（需 role >= 3）。
+// 包括用户总数、视频总数、总播放量、评论数、弹幕数、今日新增用户和视频。
 func (h *Handler) Stats(c *gin.Context) {
+	// 权限校验
 	role := middleware.GetRole(c)
 	if role < 3 {
 		response.Error(c, http.StatusForbidden, errcode.Forbidden, errcode.Message(errcode.Forbidden))
@@ -116,18 +134,21 @@ func (h *Handler) Stats(c *gin.Context) {
 	response.Success(c, stats)
 }
 
-// Users lists users with optional search query. role >= 3 only.
+// Users 列出用户列表（需 role >= 3），支持按用户名或昵称搜索。
 func (h *Handler) Users(c *gin.Context) {
+	// 权限校验
 	role := middleware.GetRole(c)
 	if role < 3 {
 		response.Error(c, http.StatusForbidden, errcode.Forbidden, errcode.Message(errcode.Forbidden))
 		return
 	}
 
+	// 分页参数与搜索关键词
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	q := c.DefaultQuery("q", "")
 
+	// 分页参数边界保护
 	if page < 1 {
 		page = 1
 	}
@@ -142,6 +163,7 @@ func (h *Handler) Users(c *gin.Context) {
 		return
 	}
 
+	// 确保返回空数组而非 nil
 	if items == nil {
 		items = []UserListItem{}
 	}
@@ -154,8 +176,10 @@ func (h *Handler) Users(c *gin.Context) {
 	})
 }
 
-// System returns server configuration and status info. role >= 3 only.
+// System 返回服务器配置和运行状态信息（需 role >= 3）。
+// 包括 Go 版本、运行时长、数据库连接状态。
 func (h *Handler) System(c *gin.Context) {
+	// 权限校验
 	role := middleware.GetRole(c)
 	if role < 3 {
 		response.Error(c, http.StatusForbidden, errcode.Forbidden, errcode.Message(errcode.Forbidden))
@@ -166,8 +190,10 @@ func (h *Handler) System(c *gin.Context) {
 	response.Success(c, sysInfo)
 }
 
-// UpdateUserRole changes a user's role. role >= 3 only.
+// UpdateUserRole 修改用户角色（需 role >= 3）。
+// 角色取值范围 1-3：1=普通用户，2=版主，3=管理员。
 func (h *Handler) UpdateUserRole(c *gin.Context) {
+	// 权限校验
 	role := middleware.GetRole(c)
 	if role < 3 {
 		response.Error(c, http.StatusForbidden, errcode.Forbidden, errcode.Message(errcode.Forbidden))
@@ -181,6 +207,7 @@ func (h *Handler) UpdateUserRole(c *gin.Context) {
 		return
 	}
 
+	// 解析请求体中的新角色值
 	var req struct {
 		Role uint8 `json:"role"`
 	}
@@ -189,6 +216,7 @@ func (h *Handler) UpdateUserRole(c *gin.Context) {
 		return
 	}
 
+	// 角色取值范围校验（1-3）
 	if req.Role < 1 || req.Role > 3 {
 		response.Error(c, http.StatusBadRequest, errcode.BadRequest, "role 取值范围为 1-3")
 		return
