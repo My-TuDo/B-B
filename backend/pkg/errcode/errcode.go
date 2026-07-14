@@ -33,6 +33,8 @@ var messages = map[int]string{
 	CategoryNotFound: "分类不存在",
 	CoverUploadFail:  "封面上传失败",
 	AvatarUploadFail: "头像上传失败",
+	TranscodeFailed:  "转码失败，无法发布。请重新上传视频",
+	TranscodeNotReady: "转码未完成，请等待转码结束后再发布",
 
 	DanmakuSendFail:   "弹幕发送失败",
 	CommentNotFound:   "评论不存在",
